@@ -1,5 +1,9 @@
 {
     "python.formatting.provider": "black",
     "python.linting.mypyEnabled": true,
-    "python.linting.pycodestyleEnabled": true
+    "python.formatting.blackArgs": [
+        "--line-length=79"
+    ],
+    "python.linting.mypyCategorySeverity.error": "Warning",
+    "python.linting.mypyCategorySeverity.note": "Hint"
 }
