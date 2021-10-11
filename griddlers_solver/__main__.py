@@ -5,7 +5,8 @@ from griddlers_solver import griddlersnet
 import logging
 import sys
 
-from . import solver
+from .grid import VAL_SPACE, Block, Value, count_blocks
+from .solver2 import ALGORITHMS
 
 _logger = logging.getLogger(__name__)
 
@@ -26,13 +27,8 @@ def main():
         _logger.info("Applying algorithms")
         print("\n".join(grid.render()))
         progress = False
-        for algo in (
-            solver.complete_runs,
-            solver.empty_sections,
-            solver.fill_blocks,
-            solver.complete_blocks,
-        ):
-            progress = grid.apply_algorithm(algo)
+        for name, method in ALGORITHMS:
+            progress = grid.apply_algorithm(name, method)
             if progress:
                 break
         else:

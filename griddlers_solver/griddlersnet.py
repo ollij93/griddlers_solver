@@ -1,5 +1,6 @@
 import requests
-from .grid import Grid
+from .grid import Block, Grid, Value
+
 
 def getjs(id: int) -> str:
     url = f"https://www.griddlers.net/nonogram/-/g/t1632255045917/i01?p_p_lifecycle=2&p_p_resource_id=griddlerPuzzle&p_p_cacheability=cacheLevelPage&_gpuzzles_WAR_puzzles_id={id}&_gpuzzles_WAR_puzzles_lite=false"
@@ -56,9 +57,10 @@ def getlolol(puzzlejs: str, key: str) -> list[list[list[int]]]:
 def toGrid(
     topHeader: list[list[list[int]]], leftHeader: list[list[list[int]]]
 ) -> Grid:
-    cols = [[b[1] for b in block] for block in topHeader]
-    rows = [[b[1] for b in block] for block in leftHeader]
+    cols = [[Block(Value(b[0]), b[1]) for b in block] for block in topHeader]
+    rows = [[Block(Value(b[0]), b[1]) for b in block] for block in leftHeader]
     return Grid(rows, cols)
+
 
 def getGrid(puzid: int) -> Grid:
     puzzle = getpuzzle(getjs(puzid))

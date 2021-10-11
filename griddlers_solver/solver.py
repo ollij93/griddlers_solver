@@ -5,7 +5,7 @@ Module containing the griddler solving algorithms.
 import logging
 import typing
 
-from .grid import Block, Value, count_blocks
+from .grid import VAL_SPACE, VAL_UNKNOWN, Block, Value, count_blocks
 
 _logger = logging.getLogger(__name__)
 
@@ -51,8 +51,10 @@ def _get_first_available_block_index(
     # Go through all the preceeding blocks
     index = 0
     while index < block_index:
-        if blocks[index] <= (len(available[available_index]) - available_curr):
-            available_curr += blocks[index] + 1
+        if blocks[index].count <= (
+            len(available[available_index]) - available_curr
+        ):
+            available_curr += blocks[index].count + 1
             index += 1
         else:
             available_index += 1
@@ -60,7 +62,7 @@ def _get_first_available_block_index(
 
     # Available index is now the first block where our block could start
     # Check it fits, or find next available block where it does
-    while blocks[block_index] > (
+    while blocks[block_index].count > (
         len(available[available_index]) - available_curr
     ):
         available_index += 1
@@ -96,14 +98,14 @@ def _fill_blocks_section(blocks: list[Block], size: int) -> list[Value]:
     :param size: The size of this available section.
     :return: The list of values determined for this section.
     """
-    ret = [Value.UNKNOWN] * size
+    ret = [VAL_UNKNOWN] * size
     for i in range(len(blocks)):
-        possible_start = sum(b + 1 for b in blocks[:i])
-        possible_end = size - 1 - sum(b + 1 for b in blocks[i + 1 :])
-        definite_start = possible_end - blocks[i] + 1
-        definite_end = possible_start + blocks[i] - 1
+        possible_start = sum(b.count + 1 for b in blocks[:i])
+        possible_end = size - 1 - sum(b.count + 1 for b in blocks[i + 1 :])
+        definite_start = possible_end - blocks[i].count + 1
+        definite_end = possible_start + blocks[i].count - 1
         for x in range(definite_start, definite_end + 1):
-            ret[x] = Value.SQUARE
+            ret[x] = blocks[i].value
     return ret
 
 
@@ -115,7 +117,7 @@ def fill_blocks(blocks: list[Block], current: list[Value]) -> list[Value]:
     :param current: The current content of the row or column.
     :return: The updated content of the row or column.
     """
-    available: list[list[Value]] = _list_split(current, Value.SPACE)
+    available: list[list[Value]] = _list_split(current, VAL_SPACE)
     start_blocks = [
         _get_first_available_block_index(blocks, available, i)
         for i in range(len(blocks))
@@ -136,8 +138,8 @@ def fill_blocks(blocks: list[Block], current: list[Value]) -> list[Value]:
         content = _fill_blocks_section(bs, alen)
         for ci, val in enumerate(content):
             ri = ci + start
-            assert ret[ri] != Value.SPACE
-            if val != Value.UNKNOWN:
+            assert ret[ri] != VAL_SPACE
+            if val != VAL_UNKNOWN:
                 ret[ri] = val
 
     return ret
@@ -151,7 +153,7 @@ def complete_blocks(blocks: list[Block], current: list[Value]) -> list[Value]:
     :param current: The current content of the row or column.
     :return: The updated content of the row or column.
     """
-    available = _list_split(current, Value.SPACE)
+    available = _list_split(current, VAL_SPACE)
     starts = [
         _get_first_available_block_index(blocks, available, bi)
         for bi in range(len(blocks))
@@ -162,7 +164,7 @@ def complete_blocks(blocks: list[Block], current: list[Value]) -> list[Value]:
     ]
     ret = current.copy()
     for ai, section in enumerate(available):
-        if not section or set(section) == {Value.UNKNOWN}:
+        if not section or set(section) == {VAL_UNKNOWN}:
             # This section is empty so can't contain complete blocks
             continue
         astart = ai + sum(len(a) for a in available[:ai])
@@ -171,19 +173,22 @@ def complete_blocks(blocks: list[Block], current: list[Value]) -> list[Value]:
             for bi in range(len(blocks))
             if starts[bi] <= ai and ends[bi] >= ai
         ]
-        max_poss = max(blocks[bi] for bi in possibles)
-        max_curr = max(count_blocks(section))
+        max_poss = max(blocks[bi].count for bi in possibles)
+        max_curr = max(b.count for _, b in count_blocks(section))
         if max_poss == max_curr:
             # The current highest block in this section is complete, find its
             # start and end
             for si, val in enumerate(section):
-                if set(section[si : si + max_poss]) == {Value.SQUARE}:
+                if set(section[si : si + max_poss]) == {val} and val not in {
+                    VAL_SPACE,
+                    VAL_UNKNOWN,
+                }:
                     if si > 0:
-                        assert ret[astart + si - 1] == Value.UNKNOWN
-                        ret[astart + si - 1] = Value.SPACE
+                        assert ret[astart + si - 1] == VAL_UNKNOWN
+                        ret[astart + si - 1] = VAL_SPACE
                     if si + max_poss < len(section):
-                        assert ret[astart + si + max_poss] == Value.UNKNOWN
-                        ret[astart + si + max_poss] = Value.SPACE
+                        assert ret[astart + si + max_poss] == VAL_UNKNOWN
+                        ret[astart + si + max_poss] = VAL_SPACE
                     break
 
     return ret
@@ -197,9 +202,9 @@ def complete_runs(blocks: list[Block], current: list[Value]) -> list[Value]:
     :param current: The current content of the row or column.
     :return: The updated content of the row or column.
     """
-    existing = count_blocks(current)
+    existing = [b for _, b in count_blocks(current)]
     if blocks == existing:
-        return [Value.SPACE if c == Value.UNKNOWN else c for c in current]
+        return [VAL_SPACE if c == VAL_UNKNOWN else c for c in current]
     else:
         return current
 
@@ -215,7 +220,7 @@ def empty_sections(blocks: list[Block], current: list[Value]) -> list[Value]:
     :param current: The current content of the row or column.
     :return: The updated content of the row or column.
     """
-    available = _list_split(current, Value.SPACE)
+    available = _list_split(current, VAL_SPACE)
     starts = [
         _get_first_available_block_index(blocks, available, bi)
         for bi in range(len(blocks))
@@ -226,7 +231,7 @@ def empty_sections(blocks: list[Block], current: list[Value]) -> list[Value]:
     ]
     ret = current.copy()
     for ai, section in enumerate(available):
-        if set(section) != {Value.UNKNOWN}:
+        if set(section) != {VAL_UNKNOWN}:
             # This section already contains something, so can't be empty
             continue
 
@@ -241,13 +246,13 @@ def empty_sections(blocks: list[Block], current: list[Value]) -> list[Value]:
             for bi in range(len(blocks))
             if starts[bi] <= ai
             and ends[bi] >= ai
-            and blocks[bi] <= len(section)
+            and blocks[bi].count <= len(section)
         ]
         if not possibles:
             # There a no blocks that can fit in this section, so fill it in
             start = ai + sum(len(a) for a in available[:ai])
             for ri in range(start, start + len(section)):
-                ret[ri] = Value.SPACE
+                ret[ri] = VAL_SPACE
         else:
             _logger.debug("%s %s %s %s", possibles, blocks, starts, ends)
 
