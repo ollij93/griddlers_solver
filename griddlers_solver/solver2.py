@@ -157,6 +157,15 @@ def segmentalgorithm(
     return decorator
 
 
+def algorithm(name: str) -> typing.Callable[[Algorithm], Algorithm]:
+    def decorator(method: Algorithm) -> Algorithm:
+        """Decorator wrapping an algorithm to register it."""
+        ALGORITHMS.append((name, method))
+        return method
+
+    return decorator
+
+
 @segmentalgorithm("Complete segments")
 def completeseg(segment: Segment) -> Line:
     """Fill in the spaces in completed segments."""
@@ -256,7 +265,7 @@ def fillbetweensingle(segment: Segment) -> Line:
     """
     if len(segment.possible) != 1:
         return segment.content
-    
+
     block = segment.possible[0]
 
     start = 0
@@ -280,6 +289,7 @@ def fillbetweensingle(segment: Segment) -> Line:
     return ret
 
 
+# TODO - Need to do the versions of these algorithms which work from the end too
 @segmentalgorithm("Stretch first")
 def stretchfirst(segment: Segment) -> Line:
     """
@@ -312,9 +322,7 @@ def inversestretchfirst(segment: Segment) -> Line:
         return segment.content
 
     block = segment.possible[0]
-    should_fill = (
-        block.value in set(segment.content[0 : block.count + 1])
-    )
+    should_fill = block.value in set(segment.content[0 : block.count + 1])
     if not should_fill:
         return segment.content
 
@@ -329,4 +337,56 @@ def inversestretchfirst(segment: Segment) -> Line:
     start = end - block.count
     for i in range(0, start):
         ret[i] = VAL_SPACE
+    return ret
+
+
+def _all_possible_solutions(
+    blocks: list[Block], size: int
+) -> typing.Iterator[Line]:
+    """
+    Generator yielding all possible solutions for the given blocks in a
+    segment of the given size.
+    """
+    if not blocks:
+        # Only one possible solution if there are no blocks
+        yield [VAL_SPACE] * size
+        return
+
+    block = blocks[0]
+    if block.count > size:
+        # If the block wont fit, there are no possible solutions
+        return
+
+    subblocks = blocks[1:]
+    needspace = subblocks and subblocks[0].value != block.value
+    for spaces in range(0, size - block.count + 1):
+        subsize = size - block.count - spaces
+        if needspace:
+            subsize -= 1
+        for subsolution in _all_possible_solutions(subblocks, subsize):
+            yield [VAL_SPACE] * spaces + [block.value] * block.count + (
+                [VAL_SPACE] if needspace else []
+            ) + subsolution
+
+
+@algorithm("Single possible value")
+def singlepossiblevalue(blocks: list[Block], line: Line) -> Line:
+    """
+    Brute force approach to figure out the value of a square by figuring out
+    if there's more than one possible value for a square given the lines
+    current state.
+    """
+    size = len(line)
+    values: list[set[Value]] = [set() for _ in range(size)]
+    for solution in _all_possible_solutions(blocks, size):
+        valid = all(line[i] in {VAL_UNKNOWN, solution[i]} for i in range(size))
+        if not valid:
+            continue
+        for i in range(size):
+            values[i].add(solution[i])
+
+    ret = line.copy()
+    for i in range(size):
+        if len(values[i]) == 1:
+            ret[i] = list(values[i])[0]
     return ret
