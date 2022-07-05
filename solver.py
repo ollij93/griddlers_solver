@@ -51,9 +51,7 @@ def _get_first_available_block_index(
     # Go through all the preceeding blocks
     index = 0
     while index < block_index:
-        if blocks[index].count <= (
-            len(available[available_index]) - available_curr
-        ):
+        if blocks[index].count <= (len(available[available_index]) - available_curr):
             available_curr += blocks[index].count + 1
             index += 1
         else:
@@ -169,9 +167,7 @@ def complete_blocks(blocks: list[Block], current: list[Value]) -> list[Value]:
             continue
         astart = ai + sum(len(a) for a in available[:ai])
         possibles = [
-            bi
-            for bi in range(len(blocks))
-            if starts[bi] <= ai and ends[bi] >= ai
+            bi for bi in range(len(blocks)) if starts[bi] <= ai and ends[bi] >= ai
         ]
         max_poss = max(blocks[bi].count for bi in possibles)
         max_curr = max(b.count for _, b in count_blocks(section))
@@ -244,9 +240,7 @@ def empty_sections(blocks: list[Block], current: list[Value]) -> list[Value]:
         possibles = [
             bi
             for bi in range(len(blocks))
-            if starts[bi] <= ai
-            and ends[bi] >= ai
-            and blocks[bi].count <= len(section)
+            if starts[bi] <= ai and ends[bi] >= ai and blocks[bi].count <= len(section)
         ]
         if not possibles:
             # There a no blocks that can fit in this section, so fill it in

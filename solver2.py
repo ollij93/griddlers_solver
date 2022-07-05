@@ -83,9 +83,7 @@ def _poss_start(blocks: list[Block], segments: list[Segment]) -> list[int]:
             filled = 0
         ret.append(si)
         filled += block.count + (
-            1
-            if (bi + 1 < len(blocks) and block.value == blocks[bi].value)
-            else 0
+            1 if (bi + 1 < len(blocks) and block.value == blocks[bi].value) else 0
         )
 
     return ret
@@ -235,9 +233,7 @@ def surroundcomplete(segment: Segment) -> Line:
 
         # If this is the first block or the previous block has the same value,
         # add a space before
-        if idx > 0 and (
-            sbi == 0 or segment_blocks[sbi - 1].value == block.value
-        ):
+        if idx > 0 and (sbi == 0 or segment_blocks[sbi - 1].value == block.value):
             ret[idx - 1] = VAL_SPACE
 
         # If this is the last block or the next block has the same value,
@@ -340,9 +336,7 @@ def inversestretchfirst(segment: Segment) -> Line:
     return ret
 
 
-def _all_possible_solutions(
-    blocks: list[Block], size: int
-) -> typing.Iterator[Line]:
+def _all_possible_solutions(blocks: list[Block], size: int) -> typing.Iterator[Line]:
     """
     Generator yielding all possible solutions for the given blocks in a
     segment of the given size.
