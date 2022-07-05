@@ -1,4 +1,4 @@
-import enum
+"""Module defining a solvable grid and it's components."""
 import logging
 import typing
 
@@ -9,6 +9,8 @@ _logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class Value:
+    """Single value in a grid."""
+
     idx: int
 
     def __repr__(self) -> str:
@@ -21,6 +23,15 @@ class Value:
         if self == VAL_SPACE:
             return " "
         return "#"
+
+    @staticmethod
+    def from_str(value: str) -> "Value":
+        """Decode an instance of this class from a string."""
+        if value == "#":
+            return Value(2)
+        if value == " ":
+            return VAL_SPACE
+        return VAL_UNKNOWN
 
 
 VAL_UNKNOWN = Value(0)
@@ -78,27 +89,33 @@ Algorithm = typing.Callable[[list[Block], Line], Line]
 
 
 class Grid:
+    """Solvable grid."""
+
     def __init__(
-        self, rowBlocks: list[list[Block]], colBlocks: list[list[Block]]
+        self, row_blocks: list[list[Block]], col_blocks: list[list[Block]]
     ) -> None:
-        self.rowBlocks = rowBlocks
-        self.colBlocks = colBlocks
-        self.volume = [VAL_UNKNOWN for _ in rowBlocks for __ in colBlocks]
+        self.row_blocks = row_blocks
+        self.col_blocks = col_blocks
+        self.volume = [VAL_UNKNOWN for _ in row_blocks for __ in col_blocks]
 
     @property
     def width(self) -> int:
-        return len(self.colBlocks)
+        """Width of the grid."""
+        return len(self.col_blocks)
 
     @property
     def height(self) -> int:
-        return len(self.rowBlocks)
+        """Height of the grid."""
+        return len(self.row_blocks)
 
     @property
     def columns(self) -> list[Line]:
+        """The grid divided into columns."""
         return [self.volume[c :: self.width] for c in range(self.width)]
 
     @property
     def rows(self) -> list[Line]:
+        """The grid divided into rows."""
         return [
             self.volume[self.width * r : self.width * (r + 1)]
             for r in range(self.height)
@@ -115,27 +132,26 @@ class Grid:
 
         assert all(
             all(b.count < 100 and b.count > 0 for b in blocks)
-            for blocks in self.rowBlocks
+            for blocks in self.row_blocks
         )
         row_prefixes = [
-            ",".join([b.prefix() for b in blocks]) for blocks in self.rowBlocks
+            ",".join([b.prefix() for b in blocks]) for blocks in self.row_blocks
         ]
         prefix_length = max(len(p) for p in row_prefixes)
 
         assert all(
             all(b.count < 100 and b.count > 0 for b in blocks)
-            for blocks in self.colBlocks
+            for blocks in self.col_blocks
         )
         column_prefixes: list[list[str]] = [
-            [b.prefix() for b in blocks] for blocks in self.colBlocks
+            [b.prefix() for b in blocks] for blocks in self.col_blocks
         ]
         prefix_height = max(len(p) for p in column_prefixes)
 
         for h in range(prefix_height):
             index = prefix_height - h
             line = " ".join(
-                f"{p[-index]:>2}" if len(p) >= index else "  "
-                for p in column_prefixes
+                f"{p[-index]:>2}" if len(p) >= index else "  " for p in column_prefixes
             )
             ret.append(f"{' '*prefix_length}|{line}")
 
@@ -153,11 +169,11 @@ class Grid:
         Check if this grid is solved with its current content.
         """
         for ri, row in enumerate(self.rows):
-            if [x[1] for x in count_blocks(row)] != self.rowBlocks[ri]:
+            if [x[1] for x in count_blocks(row)] != self.row_blocks[ri]:
                 return False
 
         for ci, column in enumerate(self.columns):
-            if [x[1] for x in count_blocks(column)] != self.colBlocks[ci]:
+            if [x[1] for x in count_blocks(column)] != self.col_blocks[ci]:
                 return False
 
         return True
@@ -173,7 +189,7 @@ class Grid:
         _logger.info(f"Applying {name}")
         progress = False
 
-        for y, row in enumerate(self.rowBlocks):
+        for y, row in enumerate(self.row_blocks):
             _logger.debug(f"Processing row {y}: {self.rows[y]}")
             content = method(row, self.rows[y])
             _logger.debug(f"New content: {content}")
@@ -181,11 +197,14 @@ class Grid:
                 continue
             for x, val in enumerate(content):
                 if val != VAL_UNKNOWN:
-                    assert self.get(x, y) in {val, VAL_UNKNOWN}, f"{x}, {y}, {self.get(x,y)}, {val}"
+                    assert self.get(x, y) in {
+                        val,
+                        VAL_UNKNOWN,
+                    }, f"{x}, {y}, {self.get(x,y)}, {val}"
                     self.set(x, y, val)
                     progress = True
 
-        for x, col in enumerate(self.colBlocks):
+        for x, col in enumerate(self.col_blocks):
             _logger.debug(f"Processing column {x}: {self.columns[x]}")
             content = method(col, self.columns[x])
             _logger.debug(f"New content: {content}")
@@ -193,7 +212,10 @@ class Grid:
                 continue
             for y, val in enumerate(content):
                 if val != VAL_UNKNOWN:
-                    assert self.get(x, y) in {val, VAL_UNKNOWN}, f"{x}, {y}, {self.get(x,y)}, {val}"
+                    assert self.get(x, y) in {
+                        val,
+                        VAL_UNKNOWN,
+                    }, f"{x}, {y}, {self.get(x,y)}, {val}"
                     self.set(x, y, val)
                     progress = True
 

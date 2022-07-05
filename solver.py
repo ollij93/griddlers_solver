@@ -203,10 +203,10 @@ def complete_runs(blocks: list[Block], current: list[Value]) -> list[Value]:
     :return: The updated content of the row or column.
     """
     existing = [b for _, b in count_blocks(current)]
+    _logger.debug("Blocks: %s, Existing: %s", blocks, existing)
     if blocks == existing:
         return [VAL_SPACE if c == VAL_UNKNOWN else c for c in current]
-    else:
-        return current
+    return current
 
 
 def empty_sections(blocks: list[Block], current: list[Value]) -> list[Value]:

@@ -27,9 +27,6 @@ jobs:
     - name: Lint with pylint
       run: |
         pylint $(git ls-files '*.py')
-    - name: Lint with pycodestyle
-      run: |
-        pycodestyle $(git ls-files '*.py')
     - name: Test with pytest
       run: |
         pytest
