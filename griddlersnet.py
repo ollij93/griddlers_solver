@@ -63,7 +63,8 @@ def getlolol(puzzlejs: str, key: str) -> list[list[list[int]]]:
     else:
         raise Exception(f"Never found the end of entry {key}")
 
-    return json.loads(retstr)
+    lolol: list[list[list[int]]] = json.loads(retstr)
+    return lolol
 
 
 def to_grid(

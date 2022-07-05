@@ -26,7 +26,7 @@ def main(argv: list[str]) -> int:
 
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
 
-    grid = griddlersnet.getGrid(args.puzzle)
+    grid = griddlersnet.get_grid(args.puzzle)
 
     _logger.info("Begining to solve")
     while not grid.check_solved():
