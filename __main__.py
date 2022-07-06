@@ -1,26 +1,32 @@
 """Main entrypoint of this package."""
 
 import argparse
-from griddlers_solver import griddlersnet
 import logging
 import sys
 
-from .grid import VAL_SPACE, Block, Value, count_blocks
+from . import griddlersnet
 from .solver2 import ALGORITHMS
 
 _logger = logging.getLogger(__name__)
 
 
-def main():
-    """Main entry point of this script."""
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    """Parse the CLI arguments."""
     parser = argparse.ArgumentParser()
+
     parser.add_argument("-d", "--debug", action="store_true")
     parser.add_argument("puzzle", type=int)
-    args = parser.parse_args(sys.argv[1:])
+
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str]) -> int:
+    """Main entry point of this script."""
+    args = _parse_args(argv)
 
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
 
-    grid = griddlersnet.getGrid(args.puzzle)
+    grid = griddlersnet.get_grid(args.puzzle)
 
     _logger.info("Begining to solve")
     while not grid.check_solved():
@@ -32,16 +38,18 @@ def main():
             if progress:
                 break
         else:
-            # Failed to make any progress, exist the main loop
+            # Failed to make any progress, exit the main loop
             break
 
-    if grid.check_solved():
-        _logger.info("SOLVED!")
-        print("\n".join(grid.render()))
-    else:
+    if not grid.check_solved():
         _logger.info("Failed to find complete solution.")
         print("\n".join(grid.render()))
+        return 1
+
+    _logger.info("SOLVED!")
+    print("\n".join(grid.render()))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main(sys.argv[1:]))
