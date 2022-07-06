@@ -82,9 +82,7 @@ def _poss_start(blocks: list[Block], segments: list[Segment]) -> list[int]:
             sidx += 1
             filled = 0
         ret.append(sidx)
-        filled += block.count + (
-            1 if (bidx + 1 < len(blocks) and block.value == blocks[bidx].value) else 0
-        )
+        filled += block.count + (1 if bidx + 1 < len(blocks) else 0)
 
     return ret
 
@@ -224,8 +222,7 @@ def surroundcomplete(segment: Segment) -> Line:
         sbis = [i for i, b in enumerate(segment_blocks) if b == block]
         sbi = sbis[0]
         if len(sbis) > 1:
-            # TODO - need to work out which instance this is if there are
-            # multiple.
+            # @@@ Need to work out which instance this is if there are multiple.
             # For now, we don't need to worry if the values in this segment
             # are all the same
             if len(set(b.value for b in segment_blocks)) > 1:
@@ -285,7 +282,7 @@ def fillbetweensingle(segment: Segment) -> Line:
     return ret
 
 
-# TODO - Need to do the versions of these algorithms which work from the end too
+# @@@ Need to do the versions of these algorithms which work from the end too
 @segmentalgorithm("Stretch first")
 def stretchfirst(segment: Segment) -> Line:
     """
