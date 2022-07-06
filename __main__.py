@@ -5,7 +5,7 @@ import logging
 import sys
 
 from . import griddlersnet
-from .solver2 import ALGORITHMS
+from .solver import ALGORITHMS
 
 _logger = logging.getLogger(__name__)
 

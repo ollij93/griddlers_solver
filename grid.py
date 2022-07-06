@@ -1,7 +1,6 @@
 """Module defining a solvable grid and it's components."""
 import logging
 import typing
-
 from dataclasses import dataclass
 
 _logger = logging.getLogger(__name__)
@@ -138,7 +137,8 @@ class Grid:
             for blocks in self.row_blocks
         )
         row_prefixes = [
-            ",".join([b.prefix() for b in blocks]) for blocks in self.row_blocks
+            ",".join([b.prefix() for b in blocks])
+            for blocks in self.row_blocks
         ]
         prefix_length = max(len(p) for p in row_prefixes)
 
@@ -154,7 +154,8 @@ class Grid:
         for height in range(prefix_height):
             index = prefix_height - height
             line = " ".join(
-                f"{p[-index]:>2}" if len(p) >= index else "  " for p in column_prefixes
+                f"{p[-index]:>2}" if len(p) >= index else "  "
+                for p in column_prefixes
             )
             ret.append(f"{' '*prefix_length}|{line}")
 
@@ -208,7 +209,9 @@ class Grid:
                     progress = True
 
         for xcoord, col in enumerate(self.col_blocks):
-            _logger.debug("Processing column %d: %s", xcoord, self.columns[xcoord])
+            _logger.debug(
+                "Processing column %d: %s", xcoord, self.columns[xcoord]
+            )
             content = method(col, self.columns[xcoord])
             _logger.debug("New content: %s", content)
             if content == self.columns[xcoord]:

@@ -2,46 +2,16 @@
 Module containing the griddler solving algorithms.
 """
 
-from dataclasses import dataclass
 import logging
-import typing
+from typing import Callable, Iterator
 
-from .grid import (
-    VAL_SPACE,
-    VAL_UNKNOWN,
-    Algorithm,
-    Block,
-    Line,
-    Value,
-    count_blocks,
-)
+from .. import grid
+from .segment import Segment
 
 _logger = logging.getLogger(__name__)
 
 
-@dataclass
-class Segment:
-    """Segment of a line that an algorithm operates on."""
-
-    content: Line
-    start: int
-    # Blocks that must go in this segment and can go nowhere else.
-    certain: list[Block]
-    # Blocks that can go in this segment, but also other segments.
-    possible: list[Block]
-
-
-def _block_fits(segment: Segment, block: Block, start: int = 0) -> bool:
-    """
-    Determine if the block will fit in the given segment.
-    Can limit the earliest start index.
-    """
-    if len(segment.content) < start + block.count:
-        return False
-    return True
-
-
-def _minspaces(blocks: list[Block]) -> int:
+def _minspaces(blocks: list[grid.Block]) -> int:
     """
     Calculate the minimum number of spaces that must exist between the
     given blocks.
@@ -53,32 +23,15 @@ def _minspaces(blocks: list[Block]) -> int:
     return ret
 
 
-def _split_segments(line: Line) -> list[Segment]:
-    """
-    Split a line into segments without filling in the blocks
-    for each segment.
-    """
-    ret: list[Segment] = []
-    curr: Line = []
-    for i, val in enumerate(line):
-        if val == VAL_SPACE:
-            if curr:
-                ret.append(Segment(curr, i - len(curr), [], []))
-                curr = []
-        else:
-            curr.append(val)
-    if curr:
-        ret.append(Segment(curr, len(line) - len(curr), [], []))
-    return ret
-
-
-def _poss_start(blocks: list[Block], segments: list[Segment]) -> list[int]:
+def _poss_start(
+    blocks: list[grid.Block], segments: list[Segment]
+) -> list[int]:
     """Get the index of the first possible segments each block can live in."""
     ret = []
     sidx = 0
     filled = 0
     for bidx, block in enumerate(blocks):
-        while not _block_fits(segments[sidx], block, filled):
+        while not segments[sidx].block_fits(block, filled):
             sidx += 1
             filled = 0
         ret.append(sidx)
@@ -87,7 +40,7 @@ def _poss_start(blocks: list[Block], segments: list[Segment]) -> list[int]:
     return ret
 
 
-def _poss_end(blocks: list[Block], segments: list[Segment]) -> list[int]:
+def _poss_end(blocks: list[grid.Block], segments: list[Segment]) -> list[int]:
     """Get the index of the last possible segments each block can live in."""
     # Just reverse everything to get the mirror image solution.
     revblocks = blocks.copy()
@@ -101,9 +54,9 @@ def _poss_end(blocks: list[Block], segments: list[Segment]) -> list[int]:
     return [len(segments) - 1 - r for r in ret]
 
 
-def split_line(blocks: list[Block], line: Line) -> list[Segment]:
+def _split_line(blocks: list[grid.Block], line: grid.Line) -> list[Segment]:
     """Split a line into each of the segments an algorithm can operate on individually."""
-    segments = _split_segments(line)
+    segments = list(Segment.from_line(line))
     starts = _poss_start(blocks, segments)
     ends = _poss_end(blocks, segments)
     for bidx, block in enumerate(blocks):
@@ -121,7 +74,7 @@ def split_line(blocks: list[Block], line: Line) -> list[Segment]:
     # that block is a certainty
     for segment in segments:
         if (
-            len(set(segment.content) - {VAL_SPACE, VAL_UNKNOWN}) >= 1
+            len(set(segment.content) - {grid.VAL_SPACE, grid.VAL_UNKNOWN}) >= 1
             and len(segment.possible) == 1
         ):
             segment.certain = segment.possible
@@ -129,18 +82,18 @@ def split_line(blocks: list[Block], line: Line) -> list[Segment]:
     return segments
 
 
-ALGORITHMS: list[tuple[str, Algorithm]] = []
+ALGORITHMS: list[tuple[str, grid.Algorithm]] = []
 
 
 def segmentalgorithm(
     name: str,
-) -> typing.Callable[[typing.Callable[[Segment], Line]], Algorithm]:
+) -> Callable[[Callable[[Segment], grid.Line]], grid.Algorithm]:
     """Decorator wrapping a segment algorithm into a full line algorithm."""
 
-    def decorator(method: typing.Callable[[Segment], Line]) -> Algorithm:
-        def newalgo(blocks: list[Block], line: Line) -> Line:
+    def decorator(method: Callable[[Segment], grid.Line]) -> grid.Algorithm:
+        def newalgo(blocks: list[grid.Block], line: grid.Line) -> grid.Line:
             ret = line.copy()
-            segments = split_line(blocks, line)
+            segments = _split_line(blocks, line)
             for segment in segments:
                 segline = method(segment)
                 for i, val in enumerate(segline):
@@ -153,10 +106,10 @@ def segmentalgorithm(
     return decorator
 
 
-def algorithm(name: str) -> typing.Callable[[Algorithm], Algorithm]:
+def algorithm(name: str) -> Callable[[grid.Algorithm], grid.Algorithm]:
     """Decorator wrapping an algorithm to register it."""
 
-    def decorator(method: Algorithm) -> Algorithm:
+    def decorator(method: grid.Algorithm) -> grid.Algorithm:
         ALGORITHMS.append((name, method))
         return method
 
@@ -164,15 +117,19 @@ def algorithm(name: str) -> typing.Callable[[Algorithm], Algorithm]:
 
 
 @segmentalgorithm("Complete segments")
-def completeseg(segment: Segment) -> Line:
+def completeseg(segment: Segment) -> grid.Line:
     """Fill in the spaces in completed segments."""
-    if [x[1] for x in count_blocks(segment.content)] == segment.possible:
-        return [VAL_SPACE if v == VAL_UNKNOWN else v for v in segment.content]
+    current_blocks = [x[1] for x in grid.count_blocks(segment.content)]
+    if current_blocks == segment.possible:
+        return [
+            grid.VAL_SPACE if v == grid.VAL_UNKNOWN else v
+            for v in segment.content
+        ]
     return segment.content.copy()
 
 
 @segmentalgorithm("Fill blocks")
-def fillseg(segment: Segment) -> Line:
+def fillseg(segment: Segment) -> grid.Line:
     """Fill in squares due to overlapping blocks in the segment."""
     ret = segment.content.copy()
     blocks = segment.certain
@@ -203,11 +160,11 @@ def fillseg(segment: Segment) -> Line:
 
 
 @segmentalgorithm("Surround complete")
-def surroundcomplete(segment: Segment) -> Line:
+def surroundcomplete(segment: Segment) -> grid.Line:
     """Surround complete blocks in the segment with spaces."""
     ret = segment.content.copy()
     segment_blocks = segment.possible
-    existing_blocks = count_blocks(segment.content)
+    existing_blocks = grid.count_blocks(segment.content)
 
     if not segment_blocks:
         return segment.content
@@ -230,8 +187,10 @@ def surroundcomplete(segment: Segment) -> Line:
 
         # If this is the first block or the previous block has the same value,
         # add a space before
-        if idx > 0 and (sbi == 0 or segment_blocks[sbi - 1].value == block.value):
-            ret[idx - 1] = VAL_SPACE
+        if idx > 0 and (
+            sbi == 0 or segment_blocks[sbi - 1].value == block.value
+        ):
+            ret[idx - 1] = grid.VAL_SPACE
 
         # If this is the last block or the next block has the same value,
         # add a space before
@@ -245,13 +204,13 @@ def surroundcomplete(segment: Segment) -> Line:
                 segment.content,
                 block,
             )
-            ret[idx + block.count] = VAL_SPACE
+            ret[idx + block.count] = grid.VAL_SPACE
 
     return ret
 
 
 @segmentalgorithm("Fill between single")
-def fillbetweensingle(segment: Segment) -> Line:
+def fillbetweensingle(segment: Segment) -> grid.Line:
     """
     In a segment with a single possible value, fill in the unknowns between
     filled squares.
@@ -263,7 +222,7 @@ def fillbetweensingle(segment: Segment) -> Line:
 
     start = 0
     for i, val in enumerate(segment.content):
-        if val != VAL_UNKNOWN:
+        if val != grid.VAL_UNKNOWN:
             start = i
             break
     else:
@@ -271,7 +230,7 @@ def fillbetweensingle(segment: Segment) -> Line:
 
     end = len(segment.content)
     for i, val in enumerate(segment.content):
-        if val != VAL_UNKNOWN:
+        if val != grid.VAL_UNKNOWN:
             end = i
     if end == len(segment.content) or end == start:
         return segment.content
@@ -284,7 +243,7 @@ def fillbetweensingle(segment: Segment) -> Line:
 
 # @@@ Need to do the versions of these algorithms which work from the end too
 @segmentalgorithm("Stretch first")
-def stretchfirst(segment: Segment) -> Line:
+def stretchfirst(segment: Segment) -> grid.Line:
     """
     If its known exactly which block is first in the segment, apply a stretch
     from the start of the segment to fill in any known squares.
@@ -304,7 +263,7 @@ def stretchfirst(segment: Segment) -> Line:
 
 
 @segmentalgorithm("Inverse stretch first")
-def inversestretchfirst(segment: Segment) -> Line:
+def inversestretchfirst(segment: Segment) -> grid.Line:
     """
     If its known exactly which block is first in the segment, add spaces
     before the first filled square such that a stretch would just hit it.
@@ -329,18 +288,20 @@ def inversestretchfirst(segment: Segment) -> Line:
 
     start = end - block.count
     for i in range(0, start):
-        ret[i] = VAL_SPACE
+        ret[i] = grid.VAL_SPACE
     return ret
 
 
-def _all_possible_solutions(blocks: list[Block], size: int) -> typing.Iterator[Line]:
+def _all_possible_solutions(
+    blocks: list[grid.Block], size: int
+) -> Iterator[grid.Line]:
     """
     Generator yielding all possible solutions for the given blocks in a
     segment of the given size.
     """
     if not blocks:
         # Only one possible solution if there are no blocks
-        yield [VAL_SPACE] * size
+        yield [grid.VAL_SPACE] * size
         return
 
     block = blocks[0]
@@ -355,22 +316,26 @@ def _all_possible_solutions(blocks: list[Block], size: int) -> typing.Iterator[L
         if needspace:
             subsize -= 1
         for subsolution in _all_possible_solutions(subblocks, subsize):
-            yield [VAL_SPACE] * spaces + [block.value] * block.count + (
-                [VAL_SPACE] if needspace else []
+            yield [grid.VAL_SPACE] * spaces + [block.value] * block.count + (
+                [grid.VAL_SPACE] if needspace else []
             ) + subsolution
 
 
 @algorithm("Single possible value")
-def singlepossiblevalue(blocks: list[Block], line: Line) -> Line:
+def singlepossiblevalue(
+    blocks: list[grid.Block], line: grid.Line
+) -> grid.Line:
     """
     Brute force approach to figure out the value of a square by figuring out
     if there's more than one possible value for a square given the lines
     current state.
     """
     size = len(line)
-    values: list[set[Value]] = [set() for _ in range(size)]
+    values: list[set[grid.Value]] = [set() for _ in range(size)]
     for solution in _all_possible_solutions(blocks, size):
-        valid = all(line[i] in {VAL_UNKNOWN, solution[i]} for i in range(size))
+        valid = all(
+            line[i] in {grid.VAL_UNKNOWN, solution[i]} for i in range(size)
+        )
         if not valid:
             continue
         for i in range(size):

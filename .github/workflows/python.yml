@@ -21,6 +21,9 @@ jobs:
     - name: Format check with black
       run: |
         black --check .
+    - name: Format check with isort
+      run: |
+        isort --check .
     - name: Typecheck with mypy
       run: |
         mypy .
