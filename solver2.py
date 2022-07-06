@@ -157,6 +157,7 @@ def segmentalgorithm(
 
 def algorithm(name: str) -> typing.Callable[[Algorithm], Algorithm]:
     """Decorator wrapping an algorithm to register it."""
+
     def decorator(method: Algorithm) -> Algorithm:
         ALGORITHMS.append((name, method))
         return method
