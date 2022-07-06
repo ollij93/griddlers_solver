@@ -1,6 +1,7 @@
 """Module for loading puzzles from griddlers.net."""
-import requests
 import json
+import requests
+
 from .grid import Block, Grid, Value
 
 

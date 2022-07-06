@@ -121,13 +121,16 @@ class Grid:
             for r in range(self.height)
         ]
 
-    def get(self, x: int, y: int) -> Value:
-        return self.volume[self.width * y + x]
+    def get(self, xcoord: int, ycoord: int) -> Value:
+        """Access a value using the X,Y coordinates."""
+        return self.volume[self.width * ycoord + xcoord]
 
-    def set(self, x: int, y: int, val: Value) -> None:
-        self.volume[self.width * y + x] = val
+    def set(self, xcoord: int, ycoord: int, val: Value) -> None:
+        """Set a value using the X,Y coordinates."""
+        self.volume[self.width * ycoord + xcoord] = val
 
     def render(self) -> list[str]:
+        """Render the grid to a series of ASCII lines."""
         ret = []
 
         assert all(
@@ -148,8 +151,8 @@ class Grid:
         ]
         prefix_height = max(len(p) for p in column_prefixes)
 
-        for h in range(prefix_height):
-            index = prefix_height - h
+        for height in range(prefix_height):
+            index = prefix_height - height
             line = " ".join(
                 f"{p[-index]:>2}" if len(p) >= index else "  " for p in column_prefixes
             )
@@ -157,8 +160,8 @@ class Grid:
 
         ret.append("-" * (prefix_length + 1 + 3 * self.width))
 
-        for ri, row in enumerate(self.rows):
-            prefix = row_prefixes[ri].rjust(prefix_length)
+        for ridx, row in enumerate(self.rows):
+            prefix = row_prefixes[ridx].rjust(prefix_length)
             content = " " + "  ".join(x.render() for x in row)
             ret.append(f"{prefix}|{content}")
 
@@ -168,12 +171,12 @@ class Grid:
         """
         Check if this grid is solved with its current content.
         """
-        for ri, row in enumerate(self.rows):
-            if [x[1] for x in count_blocks(row)] != self.row_blocks[ri]:
+        for ridx, row in enumerate(self.rows):
+            if [x[1] for x in count_blocks(row)] != self.row_blocks[ridx]:
                 return False
 
-        for ci, column in enumerate(self.columns):
-            if [x[1] for x in count_blocks(column)] != self.col_blocks[ci]:
+        for cidx, column in enumerate(self.columns):
+            if [x[1] for x in count_blocks(column)] != self.col_blocks[cidx]:
                 return False
 
         return True
@@ -186,37 +189,37 @@ class Grid:
         :param method: Method to invoke on each line to run the algorithm.
         :return: True if an update was made, false otherwise.
         """
-        _logger.info(f"Applying {name}")
+        _logger.info("Applying %s", name)
         progress = False
 
-        for y, row in enumerate(self.row_blocks):
-            _logger.debug(f"Processing row {y}: {self.rows[y]}")
-            content = method(row, self.rows[y])
-            _logger.debug(f"New content: {content}")
-            if content == self.rows[y]:
+        for ycoord, row in enumerate(self.row_blocks):
+            _logger.debug("Processing row %d: %s", ycoord, self.rows[ycoord])
+            content = method(row, self.rows[ycoord])
+            _logger.debug("New content: %s", content)
+            if content == self.rows[ycoord]:
                 continue
-            for x, val in enumerate(content):
+            for xcoord, val in enumerate(content):
                 if val != VAL_UNKNOWN:
-                    assert self.get(x, y) in {
+                    assert self.get(xcoord, ycoord) in {
                         val,
                         VAL_UNKNOWN,
-                    }, f"{x}, {y}, {self.get(x,y)}, {val}"
-                    self.set(x, y, val)
+                    }, f"{xcoord}, {ycoord}, {self.get(xcoord,ycoord)}, {val}"
+                    self.set(xcoord, ycoord, val)
                     progress = True
 
-        for x, col in enumerate(self.col_blocks):
-            _logger.debug(f"Processing column {x}: {self.columns[x]}")
-            content = method(col, self.columns[x])
-            _logger.debug(f"New content: {content}")
-            if content == self.columns[x]:
+        for xcoord, col in enumerate(self.col_blocks):
+            _logger.debug("Processing column %d: %s", xcoord, self.columns[xcoord])
+            content = method(col, self.columns[xcoord])
+            _logger.debug("New content: %s", content)
+            if content == self.columns[xcoord]:
                 continue
-            for y, val in enumerate(content):
+            for ycoord, val in enumerate(content):
                 if val != VAL_UNKNOWN:
-                    assert self.get(x, y) in {
+                    assert self.get(xcoord, ycoord) in {
                         val,
                         VAL_UNKNOWN,
-                    }, f"{x}, {y}, {self.get(x,y)}, {val}"
-                    self.set(x, y, val)
+                    }, f"{xcoord}, {ycoord}, {self.get(xcoord,ycoord)}, {val}"
+                    self.set(xcoord, ycoord, val)
                     progress = True
 
         return progress

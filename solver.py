@@ -97,13 +97,13 @@ def _fill_blocks_section(blocks: list[Block], size: int) -> list[Value]:
     :return: The list of values determined for this section.
     """
     ret = [VAL_UNKNOWN] * size
-    for i in range(len(blocks)):
-        possible_start = sum(b.count + 1 for b in blocks[:i])
-        possible_end = size - 1 - sum(b.count + 1 for b in blocks[i + 1 :])
-        definite_start = possible_end - blocks[i].count + 1
-        definite_end = possible_start + blocks[i].count - 1
-        for x in range(definite_start, definite_end + 1):
-            ret[x] = blocks[i].value
+    for idx, block in enumerate(blocks):
+        possible_start = sum(b.count + 1 for b in blocks[:idx])
+        possible_end = size - 1 - sum(b.count + 1 for b in blocks[idx + 1 :])
+        definite_start = possible_end - block.count + 1
+        definite_end = possible_start + block.count - 1
+        for defidx in range(definite_start, definite_end + 1):
+            ret[defidx] = block.value
     return ret
 
 
@@ -125,20 +125,21 @@ def fill_blocks(blocks: list[Block], current: list[Value]) -> list[Value]:
         for i in range(len(blocks))
     ]
     ret = current.copy()
-    for ai in range(len(available)):
-        alen = len(available[ai])
-        start = ai + sum(len(a) for a in available[:ai])
-        bs = [
+    for idx, avals in enumerate(available):
+        alen = len(avals)
+        start = idx + sum(len(a) for a in available[:idx])
+        blks = [
             blocks[bi]
             for bi in range(len(blocks))
-            if start_blocks[bi] >= ai and end_blocks[bi] <= ai
+            if start_blocks[bi] >= idx
+            if end_blocks[bi] <= idx
         ]
-        content = _fill_blocks_section(bs, alen)
-        for ci, val in enumerate(content):
-            ri = ci + start
-            assert ret[ri] != VAL_SPACE
+        content = _fill_blocks_section(blks, alen)
+        for cidx, val in enumerate(content):
+            ridx = cidx + start
+            assert ret[ridx] != VAL_SPACE
             if val != VAL_UNKNOWN:
-                ret[ri] = val
+                ret[ridx] = val
 
     return ret
 
@@ -161,30 +162,30 @@ def complete_blocks(blocks: list[Block], current: list[Value]) -> list[Value]:
         for bi in range(len(blocks))
     ]
     ret = current.copy()
-    for ai, section in enumerate(available):
+    for aidx, section in enumerate(available):
         if not section or set(section) == {VAL_UNKNOWN}:
             # This section is empty so can't contain complete blocks
             continue
-        astart = ai + sum(len(a) for a in available[:ai])
+        astart = aidx + sum(len(a) for a in available[:aidx])
         possibles = [
-            bi for bi in range(len(blocks)) if starts[bi] <= ai and ends[bi] >= ai
+            bi for bi in range(len(blocks)) if starts[bi] <= aidx if ends[bi] >= aidx
         ]
         max_poss = max(blocks[bi].count for bi in possibles)
         max_curr = max(b.count for _, b in count_blocks(section))
         if max_poss == max_curr:
             # The current highest block in this section is complete, find its
             # start and end
-            for si, val in enumerate(section):
-                if set(section[si : si + max_poss]) == {val} and val not in {
+            for sidx, val in enumerate(section):
+                if set(section[sidx : sidx + max_poss]) == {val} and val not in {
                     VAL_SPACE,
                     VAL_UNKNOWN,
                 }:
-                    if si > 0:
-                        assert ret[astart + si - 1] == VAL_UNKNOWN
-                        ret[astart + si - 1] = VAL_SPACE
-                    if si + max_poss < len(section):
-                        assert ret[astart + si + max_poss] == VAL_UNKNOWN
-                        ret[astart + si + max_poss] = VAL_SPACE
+                    if sidx > 0:
+                        assert ret[astart + sidx - 1] == VAL_UNKNOWN
+                        ret[astart + sidx - 1] = VAL_SPACE
+                    if sidx + max_poss < len(section):
+                        assert ret[astart + sidx + max_poss] == VAL_UNKNOWN
+                        ret[astart + sidx + max_poss] = VAL_SPACE
                     break
 
     return ret
@@ -226,27 +227,29 @@ def empty_sections(blocks: list[Block], current: list[Value]) -> list[Value]:
         for bi in range(len(blocks))
     ]
     ret = current.copy()
-    for ai, section in enumerate(available):
+    for aidx, section in enumerate(available):
         if set(section) != {VAL_UNKNOWN}:
             # This section already contains something, so can't be empty
             continue
 
         _logger.debug(
             "Checking for empty on section %d of %s onto %s",
-            ai,
+            aidx,
             blocks,
             available,
         )
         possibles = [
             bi
             for bi in range(len(blocks))
-            if starts[bi] <= ai and ends[bi] >= ai and blocks[bi].count <= len(section)
+            if starts[bi] <= aidx
+            if ends[bi] >= aidx
+            if blocks[bi].count <= len(section)
         ]
         if not possibles:
             # There a no blocks that can fit in this section, so fill it in
-            start = ai + sum(len(a) for a in available[:ai])
-            for ri in range(start, start + len(section)):
-                ret[ri] = VAL_SPACE
+            start = aidx + sum(len(a) for a in available[:aidx])
+            for ridx in range(start, start + len(section)):
+                ret[ridx] = VAL_SPACE
         else:
             _logger.debug("%s %s %s %s", possibles, blocks, starts, ends)
 

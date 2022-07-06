@@ -47,8 +47,8 @@ def _minspaces(blocks: list[Block]) -> int:
     given blocks.
     """
     ret = 0
-    for bi in range(1, len(blocks)):
-        if blocks[bi].value == blocks[bi - 1].value:
+    for bidx in range(1, len(blocks)):
+        if blocks[bidx].value == blocks[bidx - 1].value:
             ret += 1
     return ret
 
@@ -75,15 +75,15 @@ def _split_segments(line: Line) -> list[Segment]:
 def _poss_start(blocks: list[Block], segments: list[Segment]) -> list[int]:
     """Get the index of the first possible segments each block can live in."""
     ret = []
-    si = 0
+    sidx = 0
     filled = 0
-    for bi, block in enumerate(blocks):
-        while not _block_fits(segments[si], block, filled):
-            si += 1
+    for bidx, block in enumerate(blocks):
+        while not _block_fits(segments[sidx], block, filled):
+            sidx += 1
             filled = 0
-        ret.append(si)
+        ret.append(sidx)
         filled += block.count + (
-            1 if (bi + 1 < len(blocks) and block.value == blocks[bi].value) else 0
+            1 if (bidx + 1 < len(blocks) and block.value == blocks[bidx].value) else 0
         )
 
     return ret
@@ -108,14 +108,14 @@ def split_line(blocks: list[Block], line: Line) -> list[Segment]:
     segments = _split_segments(line)
     starts = _poss_start(blocks, segments)
     ends = _poss_end(blocks, segments)
-    for bi, block in enumerate(blocks):
+    for bidx, block in enumerate(blocks):
         poss = [
             i
-            for i in range(starts[bi], ends[bi] + 1)
+            for i in range(starts[bidx], ends[bidx] + 1)
             if block.count <= len(segments[i].content)
         ]
-        for si in poss:
-            segments[si].possible.append(block)
+        for sidx in poss:
+            segments[sidx].possible.append(block)
         if len(poss) == 1:
             segments[poss[0]].certain.append(block)
 
@@ -137,9 +137,9 @@ ALGORITHMS: list[tuple[str, Algorithm]] = []
 def segmentalgorithm(
     name: str,
 ) -> typing.Callable[[typing.Callable[[Segment], Line]], Algorithm]:
-    def decorator(method: typing.Callable[[Segment], Line]) -> Algorithm:
-        """Decorator wrapping a segment algorithm into a full line algorithm."""
+    """Decorator wrapping a segment algorithm into a full line algorithm."""
 
+    def decorator(method: typing.Callable[[Segment], Line]) -> Algorithm:
         def newalgo(blocks: list[Block], line: Line) -> Line:
             ret = line.copy()
             segments = split_line(blocks, line)
@@ -156,8 +156,8 @@ def segmentalgorithm(
 
 
 def algorithm(name: str) -> typing.Callable[[Algorithm], Algorithm]:
+    """Decorator wrapping an algorithm to register it."""
     def decorator(method: Algorithm) -> Algorithm:
-        """Decorator wrapping an algorithm to register it."""
         ALGORITHMS.append((name, method))
         return method
 
@@ -169,8 +169,7 @@ def completeseg(segment: Segment) -> Line:
     """Fill in the spaces in completed segments."""
     if [x[1] for x in count_blocks(segment.content)] == segment.possible:
         return [VAL_SPACE if v == VAL_UNKNOWN else v for v in segment.content]
-    else:
-        return segment.content.copy()
+    return segment.content.copy()
 
 
 @segmentalgorithm("Fill blocks")
@@ -178,15 +177,15 @@ def fillseg(segment: Segment) -> Line:
     """Fill in squares due to overlapping blocks in the segment."""
     ret = segment.content.copy()
     blocks = segment.certain
-    for bi, block in enumerate(blocks):
-        possible_start = sum(b.count for b in blocks[:bi]) + _minspaces(
-            blocks[: bi + 1]
+    for bidx, block in enumerate(blocks):
+        possible_start = sum(b.count for b in blocks[:bidx]) + _minspaces(
+            blocks[: bidx + 1]
         )
         possible_end = (
             len(segment.content)
             - 1
-            - sum(b.count for b in blocks[bi + 1 :])
-            - _minspaces(blocks[bi:])
+            - sum(b.count for b in blocks[bidx + 1 :])
+            - _minspaces(blocks[bidx:])
         )
         definite_start = possible_end - block.count + 1
         definite_end = possible_start + block.count - 1
@@ -194,7 +193,7 @@ def fillseg(segment: Segment) -> Line:
             ret[i] = block.value
         _logger.debug(
             "Block %d (%s) in %s filled between %d and %d: %s",
-            bi,
+            bidx,
             block,
             segment,
             definite_start,
@@ -265,16 +264,16 @@ def fillbetweensingle(segment: Segment) -> Line:
     block = segment.possible[0]
 
     start = 0
-    for i, v in enumerate(segment.content):
-        if v != VAL_UNKNOWN:
+    for i, val in enumerate(segment.content):
+        if val != VAL_UNKNOWN:
             start = i
             break
     else:
         return segment.content
 
     end = len(segment.content)
-    for i, v in enumerate(segment.content):
-        if v != VAL_UNKNOWN:
+    for i, val in enumerate(segment.content):
+        if val != VAL_UNKNOWN:
             end = i
     if end == len(segment.content) or end == start:
         return segment.content
