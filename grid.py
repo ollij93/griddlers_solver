@@ -15,13 +15,22 @@ class Value:
     def __repr__(self) -> str:
         return f'"{self.render()}"'
 
+    def __lt__(self, other: "Value") -> bool:
+        if not isinstance(other, Value):
+            return NotImplemented
+        return self.idx < other.idx
+
     def render(self) -> str:
         """Get the string for rendering a single square of this value."""
         if self == VAL_UNKNOWN:
             return "."
         if self == VAL_SPACE:
             return " "
-        return "#"
+        if self.idx == 2:
+            return "#"
+        if self.idx == 3:
+            return "%"
+        raise ValueError(f"Unrenderable idx value: {idx}")
 
     @staticmethod
     def from_str(value: str) -> "Value":

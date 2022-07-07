@@ -315,7 +315,7 @@ def _all_possible_solutions(
         return
 
     subblocks = blocks[1:]
-    needspace = subblocks and subblocks[0].value != block.value
+    needspace = subblocks and subblocks[0].value == block.value
     for spaces in range(0, size - block.count + 1):
         subsize = size - block.count - spaces
         if needspace:

@@ -205,3 +205,43 @@ def test_fill_between_single(
 
     out = solver.fillbetweensingle(seg)
     assert out == expected
+
+
+@pytest.mark.parametrize(
+    "blockvals,size,expectedstrs",
+    [
+        # Empty is the only solution
+        ([], 1, [" "]),
+        ([], 3, ["   "]),
+        ([], 10, ["          "]),
+        # Full is the only solution
+        ([("#", 1)], 1, ["#"]),
+        ([("%", 1)], 1, ["%"]),
+        ([("#", 3)], 3, ["###"]),
+        ([("#", 10)], 10, ["##########"]),
+        # Multiple blocks but only one solution
+        ([("#", 1), ("%", 1)], 2, ["#%"]),
+        ([("#", 1), ("#", 1)], 3, ["# #"]),
+        # Multiple solutions for single block
+        ([("#", 1)], 2, ["# ", " #"]),
+        ([("#", 2)], 4, ["##  ", " ## ", "  ##"]),
+        # Multiple solutions for multiple blocks
+        ([("#", 1), ("#", 1)], 4, ["# # ", "#  #", " # #"]),
+        ([("#", 1), ("%", 1)], 3, ["#% ", "# %", " #%"]),
+    ]
+)
+def test_all_possible_solutions(
+    blockvals: list[tuple[str, int]], size: int, expectedstrs: list[str]
+) -> None:
+    """Test the all_possible_solutions generator."""
+    blocks = [
+        grid.Block(grid.Value.from_str(char), count)
+        for char, count in blockvals
+    ]
+    expected = [
+        [grid.Value.from_str(char) for char in linestr]
+        for linestr in expectedstrs
+    ]
+    generator = solver._all_possible_solutions(blocks, size)
+    # Ordering doesn't matter
+    assert sorted(generator) == sorted(expected)
