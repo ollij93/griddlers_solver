@@ -33,7 +33,7 @@ def main(argv: list[str]) -> int:
         _logger.info("Applying algorithms")
         print("\n".join(grid.render()))
         progress = False
-        for name, method in ALGORITHMS:
+        for name, method in ALGORITHMS.items():
             progress = grid.apply_algorithm(name, method)
             if progress:
                 break

@@ -19,7 +19,6 @@ class Segment:
     """Segment of a line that an algorithm operates on."""
 
     content: grid.Line
-    start: int
     # Blocks that must go in this segment and can go nowhere else.
     certain: list[grid.Block] = dataclasses.field(default_factory=list)
     # Blocks that can go in this segment, but also other segments.
@@ -30,16 +29,16 @@ class Segment:
         return len(self.content) >= start + block.count
 
     @classmethod
-    def from_line(cls, line: grid.Line) -> Iterator["Segment"]:
+    def from_line(cls, line: grid.Line) -> Iterator[tuple[int, "Segment"]]:
         """Split a grid line into segments."""
         curr: grid.Line = []
         for i, val in enumerate(line):
             if val == grid.VAL_SPACE:
                 if curr:
-                    yield cls(curr, i - len(curr))
+                    yield i - len(curr), cls(curr)
                     curr = []
             else:
                 curr.append(val)
 
         if curr:
-            yield cls(curr, len(line) - len(curr))
+            yield len(line) - len(curr), cls(curr)

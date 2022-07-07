@@ -1,4 +1,5 @@
 *.swp
 .coverage
+coverage.xml
 __pycache__/
 venv/

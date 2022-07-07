@@ -1,7 +1,7 @@
 """Module defining a solvable grid and it's components."""
 import logging
-import typing
 from dataclasses import dataclass
+from typing import Callable
 
 _logger = logging.getLogger(__name__)
 
@@ -28,6 +28,8 @@ class Value:
         """Decode an instance of this class from a string."""
         if value == "#":
             return Value(2)
+        if value == "%":
+            return Value(3)
         if value == " ":
             return VAL_SPACE
         return VAL_UNKNOWN
@@ -84,7 +86,7 @@ def count_blocks(current: Line) -> list[tuple[int, Block]]:
     return ret
 
 
-Algorithm = typing.Callable[[list[Block], Line], Line]
+Algorithm = Callable[[list[Block], Line], Line]
 
 
 class Grid:

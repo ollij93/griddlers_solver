@@ -1,6 +1,4 @@
-"""
-Module containing the griddler solving algorithms.
-"""
+"""Module containing the griddler solving algorithms."""
 
 import logging
 from typing import Callable, Iterator
@@ -11,14 +9,14 @@ from .segment import Segment
 _logger = logging.getLogger(__name__)
 
 
-def _minspaces(blocks: list[grid.Block]) -> int:
+def _min_spaces(blocks: list[grid.Block]) -> int:
     """
     Calculate the minimum number of spaces that must exist between the
     given blocks.
     """
     ret = 0
-    for bidx in range(1, len(blocks)):
-        if blocks[bidx].value == blocks[bidx - 1].value:
+    for block, prev in zip(blocks[1:], blocks[:-1]):
+        if block.value == prev.value:
             ret += 1
     return ret
 
@@ -54,25 +52,27 @@ def _poss_end(blocks: list[grid.Block], segments: list[Segment]) -> list[int]:
     return [len(segments) - 1 - r for r in ret]
 
 
-def _split_line(blocks: list[grid.Block], line: grid.Line) -> list[Segment]:
+def _split_line(
+    blocks: list[grid.Block], line: grid.Line
+) -> list[tuple[int, Segment]]:
     """Split a line into each of the segments an algorithm can operate on individually."""
     segments = list(Segment.from_line(line))
-    starts = _poss_start(blocks, segments)
-    ends = _poss_end(blocks, segments)
+    starts = _poss_start(blocks, [s for _, s in segments])
+    ends = _poss_end(blocks, [s for _, s in segments])
     for bidx, block in enumerate(blocks):
         poss = [
             i
             for i in range(starts[bidx], ends[bidx] + 1)
-            if block.count <= len(segments[i].content)
+            if block.count <= len(segments[i][1].content)
         ]
         for sidx in poss:
-            segments[sidx].possible.append(block)
+            segments[sidx][1].possible.append(block)
         if len(poss) == 1:
-            segments[poss[0]].certain.append(block)
+            segments[poss[0]][1].certain.append(block)
 
     # For segments with some content, if there's only one possible block then
     # that block is a certainty
-    for segment in segments:
+    for _, segment in segments:
         if (
             len(set(segment.content) - {grid.VAL_SPACE, grid.VAL_UNKNOWN}) >= 1
             and len(segment.possible) == 1
@@ -82,26 +82,32 @@ def _split_line(blocks: list[grid.Block], line: grid.Line) -> list[Segment]:
     return segments
 
 
-ALGORITHMS: list[tuple[str, grid.Algorithm]] = []
+ALGORITHMS: dict[str, grid.Algorithm] = {}
 
 
 def segmentalgorithm(
     name: str,
-) -> Callable[[Callable[[Segment], grid.Line]], grid.Algorithm]:
+) -> Callable[
+    [Callable[[Segment], grid.Line]], Callable[[Segment], grid.Line]
+]:
     """Decorator wrapping a segment algorithm into a full line algorithm."""
 
-    def decorator(method: Callable[[Segment], grid.Line]) -> grid.Algorithm:
+    def decorator(
+        method: Callable[[Segment], grid.Line]
+    ) -> Callable[[Segment], grid.Line]:
         def newalgo(blocks: list[grid.Block], line: grid.Line) -> grid.Line:
             ret = line.copy()
             segments = _split_line(blocks, line)
-            for segment in segments:
+            for start, segment in segments:
                 segline = method(segment)
                 for i, val in enumerate(segline):
-                    ret[i + segment.start] = val
+                    ret[i + start] = val
             return ret
 
-        ALGORITHMS.append((name, newalgo))
-        return newalgo
+        ALGORITHMS[name] = newalgo
+        # Return the original method so it can still be tested and used
+        # directly as written, but the algorithm is correctly registered
+        return method
 
     return decorator
 
@@ -110,7 +116,7 @@ def algorithm(name: str) -> Callable[[grid.Algorithm], grid.Algorithm]:
     """Decorator wrapping an algorithm to register it."""
 
     def decorator(method: grid.Algorithm) -> grid.Algorithm:
-        ALGORITHMS.append((name, method))
+        ALGORITHMS[name] = method
         return method
 
     return decorator
@@ -134,14 +140,14 @@ def fillseg(segment: Segment) -> grid.Line:
     ret = segment.content.copy()
     blocks = segment.certain
     for bidx, block in enumerate(blocks):
-        possible_start = sum(b.count for b in blocks[:bidx]) + _minspaces(
+        possible_start = sum(b.count for b in blocks[:bidx]) + _min_spaces(
             blocks[: bidx + 1]
         )
         possible_end = (
             len(segment.content)
             - 1
             - sum(b.count for b in blocks[bidx + 1 :])
-            - _minspaces(blocks[bidx:])
+            - _min_spaces(blocks[bidx:])
         )
         definite_start = possible_end - block.count + 1
         definite_end = possible_start + block.count - 1

@@ -2,8 +2,8 @@
 
 import pytest
 
-from .. import segment
 from ... import grid
+from .. import segment
 
 
 @pytest.mark.parametrize(
@@ -21,8 +21,7 @@ def test_block_fits(seglen: int, blocklen: int, fits: bool) -> None:
     block = grid.Block(grid.Value(2), blocklen)
     # Start position of the segment doesn't matter
     assert (
-        segment.Segment([grid.VAL_UNKNOWN] * seglen, 0).block_fits(block)
-        == fits
+        segment.Segment([grid.VAL_UNKNOWN] * seglen).block_fits(block) == fits
     )
 
 
@@ -49,9 +48,7 @@ def test_block_fits_start(
     block = grid.Block(grid.Value(2), blocklen)
     # Start position of the segment doesn't matter
     assert (
-        segment.Segment([grid.VAL_UNKNOWN] * seglen, 0).block_fits(
-            block, start
-        )
+        segment.Segment([grid.VAL_UNKNOWN] * seglen).block_fits(block, start)
         == fits
     )
 
@@ -83,7 +80,7 @@ def test_from_line(linetext: str, expectedstrs: list[tuple[str, int]]) -> None:
     """Test the from_line class method of Segment."""
     line = [grid.Value.from_str(char) for char in linetext]
     expected = [
-        segment.Segment([grid.Value.from_str(char) for char in seg], strt)
+        (strt, segment.Segment([grid.Value.from_str(char) for char in seg]))
         for seg, strt in expectedstrs
     ]
     assert list(segment.Segment.from_line(line)) == expected
