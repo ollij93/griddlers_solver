@@ -97,6 +97,8 @@ def test_complete_seg(
         # Partially filling multiple
         ("..........", [("#", 6), ("#", 2)], ".#####..#."),
         ("..........", [("#", 6), ("%", 3)], ".#####.%%."),
+        # Working with existing
+        (".#....#...", [("#", 4), ("#", 3)], ".###..##.."),
     ],
 )
 def test_fill_seg(
@@ -114,4 +116,92 @@ def test_fill_seg(
     )
 
     out = solver.fillseg(seg)
+    assert out == expected
+
+
+@pytest.mark.parametrize(
+    "contentstr,blockvals,expectedstr",
+    [
+        # No blocks to surround
+        (".", [], "."),
+        # Single block to surround
+        ("#.", [("#", 1)], "# "),
+        (".#", [("#", 1)], " #"),
+        (".#.", [("#", 1)], " # "),
+        (".#...", [("#", 1)], " # .."),
+        (".#...", [("#", 1), ("#", 1)], " # .."),
+        ("...#...", [("#", 1), ("#", 1)], ".. # .."),
+        # Multiple blocks to surround
+        (".#.#.#.", [("#", 1), ("#", 1), ("#", 1)], " # # # "),
+        ("#..#.#.", [("#", 1), ("#", 1), ("#", 1)], "#  # # "),
+        ("#..#..#", [("#", 1), ("#", 1), ("#", 1)], "#  #  #"),
+        # Surrounding bigger blocks
+        ("###.", [("#", 3)], "### "),
+        (".###", [("#", 3)], " ###"),
+        (".###.", [("#", 3)], " ### "),
+        (".###...", [("#", 3)], " ### .."),
+        (".###...", [("#", 3), ("#", 1)], " ### .."),
+        ("...###...", [("#", 3), ("#", 1)], ".. ### .."),
+        (".#.###...", [("#", 1), ("#", 3), ("#", 1)], ".# ### .."),
+        # Handling multiple values
+        ("#..", [("#", 1), ("%", 1)], "#.."),
+        ("##...", [("#", 2), ("#", 1), ("%", 1)], "## .."),
+        ("##...", [("#", 2), ("%", 1), ("#", 1)], "##..."),
+        ("##..#", [("#", 2), ("%", 1), ("#", 1)], "##..#"),
+        ("##.#.", [("#", 2), ("#", 1), ("%", 1)], "## #."),
+    ],
+)
+def test_surround_complete(
+    contentstr: str, blockvals: list[tuple[str, int]], expectedstr: str
+) -> None:
+    """Test the fill surround complete function."""
+    content = [grid.Value.from_str(char) for char in contentstr]
+    expected = [grid.Value.from_str(char) for char in expectedstr]
+    seg = segment.Segment(
+        content,
+        possible=[
+            grid.Block(grid.Value.from_str(char), count)
+            for char, count in blockvals
+        ],
+    )
+
+    out = solver.surroundcomplete(seg)
+    assert out == expected
+
+
+@pytest.mark.parametrize(
+    "contentstr,blockvals,expectedstr",
+    [
+        # No filling to perform
+        ("...", [("#", 2)], "..."),
+        ("#..", [("#", 2)], "#.."),
+        (".#.", [("#", 2)], ".#."),
+        ("..#", [("#", 2)], "..#"),
+        ("#.#", [("#", 1), ("#", 1)], "#.#"),
+        # Simple filling in complete lines
+        ("#.#", [("#", 3)], "###"),
+        ("#..#", [("#", 4)], "####"),
+        # Filling in with space at the edges
+        ("..#..#..", [("#", 4)], "..####.."),
+        ("..#..#..", [("#", 5)], "..####.."),
+        ("..#..#..", [("#", 8)], "..####.."),
+        # Filling in with multiple gaps to be filled
+        ("..#.#...#.", [("#", 9)], "..#######."),
+    ],
+)
+def test_fill_between_single(
+    contentstr: str, blockvals: list[tuple[str, int]], expectedstr: str
+) -> None:
+    """Test the fill between single function."""
+    content = [grid.Value.from_str(char) for char in contentstr]
+    expected = [grid.Value.from_str(char) for char in expectedstr]
+    seg = segment.Segment(
+        content,
+        possible=[
+            grid.Block(grid.Value.from_str(char), count)
+            for char, count in blockvals
+        ],
+    )
+
+    out = solver.fillbetweensingle(seg)
     assert out == expected

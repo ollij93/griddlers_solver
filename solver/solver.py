@@ -126,12 +126,12 @@ def algorithm(name: str) -> Callable[[grid.Algorithm], grid.Algorithm]:
 def completeseg(segment: Segment) -> grid.Line:
     """Fill in the spaces in completed segments."""
     current_blocks = [x[1] for x in grid.count_blocks(segment.content)]
-    if current_blocks == segment.possible:
-        return [
-            grid.VAL_SPACE if v == grid.VAL_UNKNOWN else v
-            for v in segment.content
-        ]
-    return segment.content.copy()
+    return [
+        v
+        if v != grid.VAL_UNKNOWN or current_blocks != segment.possible
+        else grid.VAL_SPACE
+        for v in segment.content
+    ]
 
 
 @segmentalgorithm("Fill blocks")
@@ -188,8 +188,7 @@ def surroundcomplete(segment: Segment) -> grid.Line:
             # @@@ Need to work out which instance this is if there are multiple.
             # For now, we don't need to worry if the values in this segment
             # are all the same
-            if len(set(b.value for b in segment_blocks)) > 1:
-                continue
+            assert len(set(b.value for b in segment_blocks)) <= 1
 
         # If this is the first block or the previous block has the same value,
         # add a space before
