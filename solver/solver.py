@@ -21,35 +21,79 @@ def _min_spaces(blocks: list[grid.Block]) -> int:
     return ret
 
 
-def _poss_start(
-    blocks: list[grid.Block], segments: list[Segment]
-) -> list[int]:
-    """Get the index of the first possible segments each block can live in."""
-    ret = []
-    sidx = 0
-    filled = 0
-    for bidx, block in enumerate(blocks):
-        while not segments[sidx].block_fits(block, filled):
-            sidx += 1
-            filled = 0
-        ret.append(sidx)
-        filled += block.count + (1 if bidx + 1 < len(blocks) else 0)
+def _all_possible_solutions(
+    blocks: list[grid.Block], size: int
+) -> Iterator[grid.Line]:
+    """
+    Generator yielding all possible solutions for the given blocks in a
+    segment of the given size.
+    """
+    if not blocks:
+        # Only one possible solution if there are no blocks
+        yield [grid.VAL_SPACE] * size
+        return
 
-    return ret
+    block = blocks[0]
+    if block.count > size:
+        # If the block wont fit, there are no possible solutions
+        return
+
+    subblocks = blocks[1:]
+    needspace = subblocks and subblocks[0].value == block.value
+    for spaces in range(0, size - block.count + 1):
+        subsize = size - block.count - spaces
+        if needspace:
+            subsize -= 1
+        for subsolution in _all_possible_solutions(subblocks, subsize):
+            yield [grid.VAL_SPACE] * spaces + [block.value] * block.count + (
+                [grid.VAL_SPACE] if needspace else []
+            ) + subsolution
 
 
-def _poss_end(blocks: list[grid.Block], segments: list[Segment]) -> list[int]:
-    """Get the index of the last possible segments each block can live in."""
-    # Just reverse everything to get the mirror image solution.
-    revblocks = blocks.copy()
-    revsegments = segments.copy()
-    revblocks.reverse()
-    revsegments.reverse()
-    ret = _poss_start(revblocks, revsegments)
-    ret.reverse()
-    # Need to invert the indexes too as they'll be relative to the end not
-    # the begining.
-    return [len(segments) - 1 - r for r in ret]
+def _all_possible_assignments(
+    items: list[grid.Block], buckets: int
+) -> Iterator[list[list[grid.Block]]]:
+    """
+    Assign the blocks to the given number of buckets to get all possible
+    states without considering bucket sizes and content.
+    """
+    if buckets == 0:
+        return
+    if buckets == 1:
+        yield [items]
+        return
+    if not items:
+        yield [[]] * buckets
+
+    firstlot = items[:]
+    otherlot: list[grid.Block] = []
+    while firstlot:
+        for other in _all_possible_assignments(otherlot, buckets - 1):
+            yield [firstlot] + other
+        otherlot = [firstlot[-1]] + otherlot
+        firstlot = firstlot[:-1]
+
+    if otherlot:
+        empty: list[list[grid.Block]] = [[]]
+        for other in _all_possible_assignments(otherlot, buckets - 1):
+            yield empty + other
+
+
+def _is_valid_assignment(blocks: list[grid.Block], content: grid.Line) -> bool:
+    """
+    Determine whether the given list of blocks can fit in a segment with the
+    given content.
+    """
+
+    def _is_valid_solution(current: grid.Line, solution: grid.Line) -> bool:
+        return all(
+            c1 in (c2, grid.VAL_UNKNOWN) for c1, c2 in zip(current, solution)
+        )
+
+    return any(
+        _is_valid_solution(content, soln)
+        for soln in _all_possible_solutions(blocks, len(content))
+    )
 
 
 def _split_line(
@@ -57,27 +101,20 @@ def _split_line(
 ) -> list[tuple[int, Segment]]:
     """Split a line into each of the segments an algorithm can operate on individually."""
     segments = list(Segment.from_line(line))
-    starts = _poss_start(blocks, [s for _, s in segments])
-    ends = _poss_end(blocks, [s for _, s in segments])
-    for bidx, block in enumerate(blocks):
-        poss = [
-            i
-            for i in range(starts[bidx], ends[bidx] + 1)
-            if block.count <= len(segments[i][1].content)
-        ]
-        for sidx in poss:
-            segments[sidx][1].possible.append(block)
-        if len(poss) == 1:
-            segments[poss[0]][1].certain.append(block)
-
-    # For segments with some content, if there's only one possible block then
-    # that block is a certainty
-    for _, segment in segments:
-        if (
-            len(set(segment.content) - {grid.VAL_SPACE, grid.VAL_UNKNOWN}) >= 1
-            and len(segment.possible) == 1
-        ):
-            segment.certain = segment.possible
+    valid_assignments = [
+        assignment
+        for assignment in _all_possible_assignments(blocks, len(segments))
+        if all(
+            _is_valid_assignment(blk, segment.content)
+            for blk, (_, segment) in zip(assignment, segments)
+        )
+    ]
+    for segidx, (_, segment) in enumerate(segments):
+        assignments = []
+        for assignment in valid_assignments:
+            if assignment[segidx] not in assignments:
+                assignments.append(assignment[segidx])
+        segment.possible = assignments
 
     return segments
 
@@ -86,7 +123,7 @@ ALGORITHMS: dict[str, grid.Algorithm] = {}
 
 
 def segmentalgorithm(
-    name: str,
+    name: str, symmetric: bool = False
 ) -> Callable[
     [Callable[[Segment], grid.Line]], Callable[[Segment], grid.Line]
 ]:
@@ -95,6 +132,7 @@ def segmentalgorithm(
     def decorator(
         method: Callable[[Segment], grid.Line]
     ) -> Callable[[Segment], grid.Line]:
+        @algorithm(name, symmetric)
         def newalgo(blocks: list[grid.Block], line: grid.Line) -> grid.Line:
             ret = line.copy()
             segments = _split_line(blocks, line)
@@ -104,7 +142,6 @@ def segmentalgorithm(
                     ret[i + start] = val
             return ret
 
-        ALGORITHMS[name] = newalgo
         # Return the original method so it can still be tested and used
         # directly as written, but the algorithm is correctly registered
         return method
@@ -112,11 +149,23 @@ def segmentalgorithm(
     return decorator
 
 
-def algorithm(name: str) -> Callable[[grid.Algorithm], grid.Algorithm]:
+def algorithm(
+    name: str, symmetric: bool = False
+) -> Callable[[grid.Algorithm], grid.Algorithm]:
     """Decorator wrapping an algorithm to register it."""
 
     def decorator(method: grid.Algorithm) -> grid.Algorithm:
         ALGORITHMS[name] = method
+        if symmetric:
+
+            def counterpart(
+                blocks: list[grid.Block], line: grid.Line
+            ) -> grid.Line:
+                rev_blocks = blocks[::-1]
+                rev_line = line[::-1]
+                return method(rev_blocks, rev_line)[::-1]
+
+            ALGORITHMS[name + " - reversed"] = counterpart
         return method
 
     return decorator
@@ -126,9 +175,12 @@ def algorithm(name: str) -> Callable[[grid.Algorithm], grid.Algorithm]:
 def completeseg(segment: Segment) -> grid.Line:
     """Fill in the spaces in completed segments."""
     current_blocks = [x[1] for x in grid.count_blocks(segment.content)]
+    if len(segment.possible) != 1:
+        return segment.content[:]
+
     return [
         v
-        if v != grid.VAL_UNKNOWN or current_blocks != segment.possible
+        if v != grid.VAL_UNKNOWN or current_blocks != segment.possible[0]
         else grid.VAL_SPACE
         for v in segment.content
     ]
@@ -138,7 +190,10 @@ def completeseg(segment: Segment) -> grid.Line:
 def fillseg(segment: Segment) -> grid.Line:
     """Fill in squares due to overlapping blocks in the segment."""
     ret = segment.content.copy()
-    blocks = segment.certain
+    if len(segment.possible) != 1:
+        return ret
+    blocks = segment.possible[0]
+
     for bidx, block in enumerate(blocks):
         possible_start = sum(b.count for b in blocks[:bidx]) + _min_spaces(
             blocks[: bidx + 1]
@@ -168,8 +223,11 @@ def fillseg(segment: Segment) -> grid.Line:
 @segmentalgorithm("Surround complete")
 def surroundcomplete(segment: Segment) -> grid.Line:
     """Surround complete blocks in the segment with spaces."""
+    if len(segment.possible) != 1:
+        return segment.content[:]
+
     ret = segment.content.copy()
-    segment_blocks = segment.possible
+    segment_blocks = segment.possible[0]
     existing_blocks = grid.count_blocks(segment.content)
 
     if not segment_blocks:
@@ -220,10 +278,10 @@ def fillbetweensingle(segment: Segment) -> grid.Line:
     In a segment with a single possible value, fill in the unknowns between
     filled squares.
     """
-    if len(segment.possible) != 1:
+    if len(segment.possible) != 1 or len(segment.possible[0]) != 1:
         return segment.content
 
-    block = segment.possible[0]
+    block = segment.possible[0][0]
 
     start = 0
     for i, val in enumerate(segment.content):
@@ -246,17 +304,16 @@ def fillbetweensingle(segment: Segment) -> grid.Line:
     return ret
 
 
-# @@@ Need to do the versions of these algorithms which work from the end too
-@segmentalgorithm("Stretch first")
+@segmentalgorithm("Stretch first", symmetric=True)
 def stretchfirst(segment: Segment) -> grid.Line:
     """
     If its known exactly which block is first in the segment, apply a stretch
     from the start of the segment to fill in any known squares.
     """
-    if not segment.possible or segment.possible != segment.certain:
+    if len(segment.possible) != 1:
         return segment.content
 
-    block = segment.possible[0]
+    block = segment.possible[0][0]
     ret = segment.content.copy()
     filling = False
     for i in range(block.count):
@@ -267,7 +324,7 @@ def stretchfirst(segment: Segment) -> grid.Line:
     return ret
 
 
-@segmentalgorithm("Inverse stretch first")
+@segmentalgorithm("Inverse stretch first", symmetric=True)
 def inversestretchfirst(segment: Segment) -> grid.Line:
     """
     If its known exactly which block is first in the segment, add spaces
@@ -275,10 +332,10 @@ def inversestretchfirst(segment: Segment) -> grid.Line:
 
     Example: "..#." -> " .#." for block of 2
     """
-    if not segment.possible or segment.possible != segment.certain:
+    if len(segment.possible) != 1:
         return segment.content
 
-    block = segment.possible[0]
+    block = segment.possible[0][0]
     should_fill = block.value in set(segment.content[0 : block.count + 1])
     if not should_fill:
         return segment.content
@@ -297,36 +354,7 @@ def inversestretchfirst(segment: Segment) -> grid.Line:
     return ret
 
 
-def _all_possible_solutions(
-    blocks: list[grid.Block], size: int
-) -> Iterator[grid.Line]:
-    """
-    Generator yielding all possible solutions for the given blocks in a
-    segment of the given size.
-    """
-    if not blocks:
-        # Only one possible solution if there are no blocks
-        yield [grid.VAL_SPACE] * size
-        return
-
-    block = blocks[0]
-    if block.count > size:
-        # If the block wont fit, there are no possible solutions
-        return
-
-    subblocks = blocks[1:]
-    needspace = subblocks and subblocks[0].value == block.value
-    for spaces in range(0, size - block.count + 1):
-        subsize = size - block.count - spaces
-        if needspace:
-            subsize -= 1
-        for subsolution in _all_possible_solutions(subblocks, subsize):
-            yield [grid.VAL_SPACE] * spaces + [block.value] * block.count + (
-                [grid.VAL_SPACE] if needspace else []
-            ) + subsolution
-
-
-@algorithm("Single possible value")
+@algorithm("BruteForce: Single possible value")
 def singlepossiblevalue(
     blocks: list[grid.Block], line: grid.Line
 ) -> grid.Line:

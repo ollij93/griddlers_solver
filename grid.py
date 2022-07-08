@@ -30,7 +30,7 @@ class Value:
             return "#"
         if self.idx == 3:
             return "%"
-        raise ValueError(f"Unrenderable idx value: {idx}")
+        raise ValueError(f"Unrenderable idx value: {self.idx}")
 
     @staticmethod
     def from_str(value: str) -> "Value":

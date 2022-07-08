@@ -19,10 +19,8 @@ class Segment:
     """Segment of a line that an algorithm operates on."""
 
     content: grid.Line
-    # Blocks that must go in this segment and can go nowhere else.
-    certain: list[grid.Block] = dataclasses.field(default_factory=list)
-    # Blocks that can go in this segment, but also other segments.
-    possible: list[grid.Block] = dataclasses.field(default_factory=list)
+    # Block combinationss that can go in this segment.
+    possible: list[list[grid.Block]] = dataclasses.field(default_factory=list)
 
     def block_fits(self, block: grid.Block, start: int = 0) -> bool:
         """Determine if the block will fit in this segment."""

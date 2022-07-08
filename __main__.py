@@ -15,6 +15,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
 
     parser.add_argument("-d", "--debug", action="store_true")
+    parser.add_argument("-f", "--brute-force", action="store_true")
     parser.add_argument("puzzle", type=int)
 
     return parser.parse_args(argv)
@@ -34,6 +35,10 @@ def main(argv: list[str]) -> int:
         print("\n".join(grid.render()))
         progress = False
         for name, method in ALGORITHMS.items():
+            if name.startswith("BruteForce:") and not args.brute_force:
+                # Skip this brute force algorithm as not selected
+                continue
+
             progress = grid.apply_algorithm(name, method)
             if progress:
                 break
