@@ -1,10 +1,48 @@
 """Tests for the solver module."""
 # pylint: disable=protected-access
 
+from unittest import mock
+
 import pytest
 
 from ... import grid
 from .. import segment, solver
+
+
+# Patching the algorithms object to not leave test stuff globally registered
+@mock.patch.object(solver, "ALGORITHMS", {})
+def test_algorithm() -> None:
+    """Test the algorithm decorator."""
+
+    @solver.algorithm("TEST")
+    def test_algo(_: list[grid.Block], line: grid.Line) -> grid.Line:
+        return line
+
+    # Check the above method has been correctly registered
+    assert solver.ALGORITHMS["TEST"] is test_algo
+    assert solver.ALGORITHMS["TEST"](
+        [], [grid.Value(i) for i in [0, 1, 2]]
+    ) == [grid.Value(i) for i in [0, 1, 2]]
+    assert "TEST - reversed" not in solver.ALGORITHMS
+
+
+# Patching the algorithms object to not leave test stuff globally registered
+@mock.patch.object(solver, "ALGORITHMS", {})
+def test_algorithm_symmetric() -> None:
+    """Test the algorithm decorator with the symmetic argument."""
+
+    @solver.algorithm("TEST", symmetric=True)
+    def test_algo(_: list[grid.Block], line: grid.Line) -> grid.Line:
+        return [grid.Value(3)] + line[1:]
+
+    # Check the symmetric version and the regular version of the above algorithm
+    # have been covered
+    assert solver.ALGORITHMS["TEST"](
+        [], [grid.Value(i) for i in [0, 1, 2]]
+    ) == [grid.Value(i) for i in [3, 1, 2]]
+    assert solver.ALGORITHMS["TEST - reversed"](
+        [], [grid.Value(i) for i in [0, 1, 2]]
+    ) == [grid.Value(i) for i in [0, 1, 3]]
 
 
 @pytest.mark.parametrize(
@@ -33,6 +71,46 @@ def test_min_spaces(inblocks: list[tuple[str, int]], expected: int) -> None:
         for char, count in inblocks
     ]
     assert solver._min_spaces(blocks) == expected
+
+
+@pytest.mark.parametrize(
+    "blockvals,size,expectedstrs",
+    [
+        # Empty is the only solution
+        ([], 1, [" "]),
+        ([], 3, ["   "]),
+        ([], 10, ["          "]),
+        # Full is the only solution
+        ([("#", 1)], 1, ["#"]),
+        ([("%", 1)], 1, ["%"]),
+        ([("#", 3)], 3, ["###"]),
+        ([("#", 10)], 10, ["##########"]),
+        # Multiple blocks but only one solution
+        ([("#", 1), ("%", 1)], 2, ["#%"]),
+        ([("#", 1), ("#", 1)], 3, ["# #"]),
+        # Multiple solutions for single block
+        ([("#", 1)], 2, ["# ", " #"]),
+        ([("#", 2)], 4, ["##  ", " ## ", "  ##"]),
+        # Multiple solutions for multiple blocks
+        ([("#", 1), ("#", 1)], 4, ["# # ", "#  #", " # #"]),
+        ([("#", 1), ("%", 1)], 3, ["#% ", "# %", " #%"]),
+    ],
+)
+def test_all_possible_solutions(
+    blockvals: list[tuple[str, int]], size: int, expectedstrs: list[str]
+) -> None:
+    """Test the all_possible_solutions generator."""
+    blocks = [
+        grid.Block(grid.Value.from_str(char), count)
+        for char, count in blockvals
+    ]
+    expected = [
+        [grid.Value.from_str(char) for char in linestr]
+        for linestr in expectedstrs
+    ]
+    generator = solver._all_possible_solutions(blocks, size)
+    # Ordering doesn't matter
+    assert sorted(generator) == sorted(expected)
 
 
 @pytest.mark.parametrize(
@@ -93,6 +171,20 @@ def test_split_line(
         for strt, content, possibles in expectedparts
     ]
     assert solver._split_line(blocks, line) == expected
+
+
+# Patching the algorithms object to not leave test stuff globally registered
+@mock.patch.object(solver, "ALGORITHMS", {})
+def test_segment_algorithm() -> None:
+    """Test the segment algorithm decorator."""
+
+    @solver.segmentalgorithm("TEST")
+    def test_algo(seg: segment.Segment) -> grid.Line:
+        return [grid.Value(3)] + seg.content[1:]
+
+    assert solver.ALGORITHMS["TEST"](
+        [], [grid.Value(i) for i in [0, 0, 1, 0, 1, 0, 1, 0, 0]]
+    ) == [grid.Value(i) for i in [3, 0, 1, 3, 1, 3, 1, 3, 0]]
 
 
 @pytest.mark.parametrize(
@@ -245,27 +337,28 @@ def test_surround_complete(
 
 
 @pytest.mark.parametrize(
-    "contentstr,blockvals,expectedstr",
+    "contentstr,possible,expectedstr",
     [
         # No filling to perform
-        ("...", [("#", 2)], "..."),
-        ("#..", [("#", 2)], "#.."),
-        (".#.", [("#", 2)], ".#."),
-        ("..#", [("#", 2)], "..#"),
-        ("#.#", [("#", 1), ("#", 1)], "#.#"),
+        ("...", [[("#", 2)]], "..."),
+        ("#..", [[("#", 2)]], "#.."),
+        (".#.", [[("#", 2)]], ".#."),
+        ("..#", [[("#", 2)]], "..#"),
+        ("#.#", [[("#", 1), ("#", 1)]], "#.#"),
+        (".#.", [[], [("#", 1)]], ".#."),
         # Simple filling in complete lines
-        ("#.#", [("#", 3)], "###"),
-        ("#..#", [("#", 4)], "####"),
+        ("#.#", [[("#", 3)]], "###"),
+        ("#..#", [[("#", 4)]], "####"),
         # Filling in with space at the edges
-        ("..#..#..", [("#", 4)], "..####.."),
-        ("..#..#..", [("#", 5)], "..####.."),
-        ("..#..#..", [("#", 8)], "..####.."),
+        ("..#..#..", [[("#", 4)]], "..####.."),
+        ("..#..#..", [[("#", 5)]], "..####.."),
+        ("..#..#..", [[("#", 8)]], "..####.."),
         # Filling in with multiple gaps to be filled
-        ("..#.#...#.", [("#", 9)], "..#######."),
+        ("..#.#...#.", [[("#", 9)]], "..#######."),
     ],
 )
 def test_fill_between_single(
-    contentstr: str, blockvals: list[tuple[str, int]], expectedstr: str
+    contentstr: str, possible: list[list[tuple[str, int]]], expectedstr: str
 ) -> None:
     """Test the fill between single function."""
     content = [grid.Value.from_str(char) for char in contentstr]
@@ -277,6 +370,7 @@ def test_fill_between_single(
                 grid.Block(grid.Value.from_str(char), count)
                 for char, count in blockvals
             ]
+            for blockvals in possible
         ],
     )
 
@@ -285,43 +379,95 @@ def test_fill_between_single(
 
 
 @pytest.mark.parametrize(
-    "blockvals,size,expectedstrs",
+    "contentstr,possible,expectedstr",
     [
-        # Empty is the only solution
-        ([], 1, [" "]),
-        ([], 3, ["   "]),
-        ([], 10, ["          "]),
-        # Full is the only solution
-        ([("#", 1)], 1, ["#"]),
-        ([("%", 1)], 1, ["%"]),
-        ([("#", 3)], 3, ["###"]),
-        ([("#", 10)], 10, ["##########"]),
-        # Multiple blocks but only one solution
-        ([("#", 1), ("%", 1)], 2, ["#%"]),
-        ([("#", 1), ("#", 1)], 3, ["# #"]),
-        # Multiple solutions for single block
-        ([("#", 1)], 2, ["# ", " #"]),
-        ([("#", 2)], 4, ["##  ", " ## ", "  ##"]),
-        # Multiple solutions for multiple blocks
-        ([("#", 1), ("#", 1)], 4, ["# # ", "#  #", " # #"]),
-        ([("#", 1), ("%", 1)], 3, ["#% ", "# %", " #%"]),
+        # No blocks to stretch
+        ("...", [[]], "..."),
+        # Not certain which block is first
+        ("#...", [[("#", 2)], []], "#..."),
+        ("#...", [[("#", 2)], [("#", 3)]], "#..."),
+        ("#...", [[("#", 2), ("#", 3)], [("#", 3)]], "#..."),
+        ("#...", [[("#", 2)], [("%", 2)]], "#..."),
+        # Not stretchable
+        (".#..", [[("#", 2)]], ".#.."),
+        ("..#..", [[("#", 2)]], "..#.."),
+        ("..#.", [[("#", 3)]], "..#."),
+        # Single possibility to be stretched
+        ("#...", [[("#", 2)]], "##.."),
+        ("#...", [[("#", 3)]], "###."),
+        (".#..", [[("#", 3)]], ".##."),
+        # Multiple possibilities but known value to stretch
+        (
+            "#...",
+            [[("#", 2)], [("#", 2), ("#", 1)], [("#", 2), ("%", 2)]],
+            "##..",
+        ),
     ],
 )
-def test_all_possible_solutions(
-    blockvals: list[tuple[str, int]], size: int, expectedstrs: list[str]
+def test_stretch_first(
+    contentstr: str, possible: list[list[tuple[str, int]]], expectedstr: str
 ) -> None:
-    """Test the all_possible_solutions generator."""
-    blocks = [
-        grid.Block(grid.Value.from_str(char), count)
-        for char, count in blockvals
-    ]
-    expected = [
-        [grid.Value.from_str(char) for char in linestr]
-        for linestr in expectedstrs
-    ]
-    generator = solver._all_possible_solutions(blocks, size)
-    # Ordering doesn't matter
-    assert sorted(generator) == sorted(expected)
+    """Test the stretch first algorithm."""
+    content = [grid.Value.from_str(char) for char in contentstr]
+    expected = [grid.Value.from_str(char) for char in expectedstr]
+    seg = segment.Segment(
+        content,
+        possible=[
+            [
+                grid.Block(grid.Value.from_str(char), count)
+                for char, count in blockvals
+            ]
+            for blockvals in possible
+        ],
+    )
+
+    out = solver.stretchfirst(seg)
+    assert out == expected
+
+
+@pytest.mark.parametrize(
+    "contentstr,possible,expectedstr",
+    [
+        # No blocks to pad
+        ("...", [[]], "..."),
+        # Not certain which block is partially filled or first
+        ("..#..", [[("#", 2)], [("#", 3)]], "..#.."),
+        ("..#..", [[("#", 2)], [("%", 1), ("#", 2)]], "..#.."),
+        ("..#..", [[("#", 1), ("#", 1)]], "..#.."),
+        # Nothing to pad
+        ("#..", [[("#", 3)]], "#.."),
+        (".#.", [[("#", 3)]], ".#."),
+        ("..#", [[("#", 3)]], "..#"),
+        # Single possibility to be padded
+        ("..#..", [[("#", 2)]], " .#.."),
+        ("..##.", [[("#", 2)]], "  ##."),
+        # Multiple possibilities but known value to padded
+        (
+            "..#..",
+            [[("#", 2)], [("#", 2), ("#", 1)], [("#", 2), ("%", 2)]],
+            " .#..",
+        ),
+    ],
+)
+def test_inverse_stretch_first(
+    contentstr: str, possible: list[list[tuple[str, int]]], expectedstr: str
+) -> None:
+    """Test the inverse stretch first algorithm."""
+    content = [grid.Value.from_str(char) for char in contentstr]
+    expected = [grid.Value.from_str(char) for char in expectedstr]
+    seg = segment.Segment(
+        content,
+        possible=[
+            [
+                grid.Block(grid.Value.from_str(char), count)
+                for char, count in blockvals
+            ]
+            for blockvals in possible
+        ],
+    )
+
+    out = solver.inversestretchfirst(seg)
+    assert out == expected
 
 
 @pytest.mark.parametrize(

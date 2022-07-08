@@ -9,6 +9,28 @@ from .segment import Segment
 _logger = logging.getLogger(__name__)
 
 
+def algorithm(
+    name: str, symmetric: bool = False
+) -> Callable[[grid.Algorithm], grid.Algorithm]:
+    """Decorator wrapping an algorithm to register it."""
+
+    def decorator(method: grid.Algorithm) -> grid.Algorithm:
+        ALGORITHMS[name] = method
+        if symmetric:
+
+            def counterpart(
+                blocks: list[grid.Block], line: grid.Line
+            ) -> grid.Line:
+                rev_blocks = blocks[::-1]
+                rev_line = line[::-1]
+                return method(rev_blocks, rev_line)[::-1]
+
+            ALGORITHMS[name + " - reversed"] = counterpart
+        return method
+
+    return decorator
+
+
 def _min_spaces(blocks: list[grid.Block]) -> int:
     """
     Calculate the minimum number of spaces that must exist between the
@@ -149,34 +171,12 @@ def segmentalgorithm(
     return decorator
 
 
-def algorithm(
-    name: str, symmetric: bool = False
-) -> Callable[[grid.Algorithm], grid.Algorithm]:
-    """Decorator wrapping an algorithm to register it."""
-
-    def decorator(method: grid.Algorithm) -> grid.Algorithm:
-        ALGORITHMS[name] = method
-        if symmetric:
-
-            def counterpart(
-                blocks: list[grid.Block], line: grid.Line
-            ) -> grid.Line:
-                rev_blocks = blocks[::-1]
-                rev_line = line[::-1]
-                return method(rev_blocks, rev_line)[::-1]
-
-            ALGORITHMS[name + " - reversed"] = counterpart
-        return method
-
-    return decorator
-
-
 @segmentalgorithm("Complete segments")
 def completeseg(segment: Segment) -> grid.Line:
     """Fill in the spaces in completed segments."""
     current_blocks = [x[1] for x in grid.count_blocks(segment.content)]
     if len(segment.possible) != 1:
-        return segment.content[:]
+        return segment.content
 
     return [
         v
@@ -224,7 +224,7 @@ def fillseg(segment: Segment) -> grid.Line:
 def surroundcomplete(segment: Segment) -> grid.Line:
     """Surround complete blocks in the segment with spaces."""
     if len(segment.possible) != 1:
-        return segment.content[:]
+        return segment.content
 
     ret = segment.content.copy()
     segment_blocks = segment.possible[0]
@@ -310,7 +310,10 @@ def stretchfirst(segment: Segment) -> grid.Line:
     If its known exactly which block is first in the segment, apply a stretch
     from the start of the segment to fill in any known squares.
     """
-    if len(segment.possible) != 1:
+    if (
+        not all(segment.possible)
+        or len({blks[0] for blks in segment.possible}) != 1
+    ):
         return segment.content
 
     block = segment.possible[0][0]
@@ -327,12 +330,15 @@ def stretchfirst(segment: Segment) -> grid.Line:
 @segmentalgorithm("Inverse stretch first", symmetric=True)
 def inversestretchfirst(segment: Segment) -> grid.Line:
     """
-    If its known exactly which block is first in the segment, add spaces
+    If its known exactly which block is in the segment, add spaces
     before the first filled square such that a stretch would just hit it.
 
     Example: "..#." -> " .#." for block of 2
     """
-    if len(segment.possible) != 1:
+    if (
+        not all(segment.possible)
+        or len({blks[0] for blks in segment.possible}) != 1
+    ):
         return segment.content
 
     block = segment.possible[0][0]
