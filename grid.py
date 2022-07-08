@@ -1,8 +1,7 @@
 """Module defining a solvable grid and it's components."""
 import logging
-import typing
-
 from dataclasses import dataclass
+from typing import Callable
 
 _logger = logging.getLogger(__name__)
 
@@ -16,19 +15,30 @@ class Value:
     def __repr__(self) -> str:
         return f'"{self.render()}"'
 
+    def __lt__(self, other: "Value") -> bool:
+        if not isinstance(other, Value):
+            return NotImplemented
+        return self.idx < other.idx
+
     def render(self) -> str:
         """Get the string for rendering a single square of this value."""
         if self == VAL_UNKNOWN:
             return "."
         if self == VAL_SPACE:
             return " "
-        return "#"
+        if self.idx == 2:
+            return "#"
+        if self.idx == 3:
+            return "%"
+        raise ValueError(f"Unrenderable idx value: {self.idx}")
 
     @staticmethod
     def from_str(value: str) -> "Value":
         """Decode an instance of this class from a string."""
         if value == "#":
             return Value(2)
+        if value == "%":
+            return Value(3)
         if value == " ":
             return VAL_SPACE
         return VAL_UNKNOWN
@@ -85,7 +95,7 @@ def count_blocks(current: Line) -> list[tuple[int, Block]]:
     return ret
 
 
-Algorithm = typing.Callable[[list[Block], Line], Line]
+Algorithm = Callable[[list[Block], Line], Line]
 
 
 class Grid:
@@ -138,7 +148,8 @@ class Grid:
             for blocks in self.row_blocks
         )
         row_prefixes = [
-            ",".join([b.prefix() for b in blocks]) for blocks in self.row_blocks
+            ",".join([b.prefix() for b in blocks])
+            for blocks in self.row_blocks
         ]
         prefix_length = max(len(p) for p in row_prefixes)
 
@@ -154,7 +165,8 @@ class Grid:
         for height in range(prefix_height):
             index = prefix_height - height
             line = " ".join(
-                f"{p[-index]:>2}" if len(p) >= index else "  " for p in column_prefixes
+                f"{p[-index]:>2}" if len(p) >= index else "  "
+                for p in column_prefixes
             )
             ret.append(f"{' '*prefix_length}|{line}")
 
@@ -208,7 +220,9 @@ class Grid:
                     progress = True
 
         for xcoord, col in enumerate(self.col_blocks):
-            _logger.debug("Processing column %d: %s", xcoord, self.columns[xcoord])
+            _logger.debug(
+                "Processing column %d: %s", xcoord, self.columns[xcoord]
+            )
             content = method(col, self.columns[xcoord])
             _logger.debug("New content: %s", content)
             if content == self.columns[xcoord]:
