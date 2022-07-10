@@ -3,6 +3,8 @@ import logging
 from dataclasses import dataclass
 from typing import Callable
 
+from termcolor import colored
+
 _logger = logging.getLogger(__name__)
 
 
@@ -12,13 +14,31 @@ class Value:
 
     idx: int
 
-    def __repr__(self) -> str:
-        return f'"{self.render()}"'
-
     def __lt__(self, other: "Value") -> bool:
         if not isinstance(other, Value):
             return NotImplemented
         return self.idx < other.idx
+
+    def color(self) -> str:
+        """Get the color to be used for this value."""
+        ret = None
+        if self.idx == 3:
+            ret = "red"
+        elif self.idx == 4:
+            ret = "yellow"
+        elif self.idx == 5:
+            ret = "green"
+        elif self.idx == 6:
+            ret = "blue"
+        elif self.idx == 7:
+            ret = "magenta"
+        elif self.idx == 8:
+            ret = "cyan"
+        elif self.idx == 9:
+            ret = "grey"
+        else:
+            raise ValueError(f"Unrenderable idx value: {self.idx}")
+        return ret
 
     def render(self) -> str:
         """Get the string for rendering a single square of this value."""
@@ -28,9 +48,7 @@ class Value:
             return " "
         if self.idx == 2:
             return "#"
-        if self.idx == 3:
-            return "%"
-        raise ValueError(f"Unrenderable idx value: {self.idx}")
+        return colored("#", self.color())
 
     @staticmethod
     def from_str(value: str) -> "Value":
@@ -64,7 +82,10 @@ class Block:
 
     def prefix(self) -> str:
         """Get the string for rendering this block prefix."""
-        return str(self.count)
+        content = f"{self.count:>2}"
+        if self.value.idx == 2:
+            return content
+        return colored(content, self.value.color())
 
 
 Line = list[Value]
@@ -147,35 +168,33 @@ class Grid:
             all(b.count < 100 and b.count > 0 for b in blocks)
             for blocks in self.row_blocks
         )
-        row_prefixes = [
+        row_suffixes = [
             ",".join([b.prefix() for b in blocks])
             for blocks in self.row_blocks
         ]
-        prefix_length = max(len(p) for p in row_prefixes)
 
         assert all(
             all(b.count < 100 and b.count > 0 for b in blocks)
             for blocks in self.col_blocks
         )
-        column_prefixes: list[list[str]] = [
-            [b.prefix() for b in blocks] for blocks in self.col_blocks
-        ]
-        prefix_height = max(len(p) for p in column_prefixes)
-
-        for height in range(prefix_height):
-            index = prefix_height - height
-            line = " ".join(
-                f"{p[-index]:>2}" if len(p) >= index else "  "
-                for p in column_prefixes
-            )
-            ret.append(f"{' '*prefix_length}|{line}")
-
-        ret.append("-" * (prefix_length + 1 + 3 * self.width))
 
         for ridx, row in enumerate(self.rows):
-            prefix = row_prefixes[ridx].rjust(prefix_length)
+            suffix = row_suffixes[ridx]
             content = " " + "  ".join(x.render() for x in row)
-            ret.append(f"{prefix}|{content}")
+            ret.append(f"{content}|{suffix}")
+
+        ret.append("-" * (3 * self.width))
+
+        column_suffixes: list[list[str]] = [
+            [b.prefix() for b in blocks] for blocks in self.col_blocks
+        ]
+        suffix_height = max(len(p) for p in column_suffixes)
+        for height in range(suffix_height):
+            line = " ".join(
+                f"{p[height]}" if len(p) > height else "  "
+                for p in column_suffixes
+            )
+            ret.append(f"{line}|")
 
         return ret
 
@@ -183,15 +202,7 @@ class Grid:
         """
         Check if this grid is solved with its current content.
         """
-        for ridx, row in enumerate(self.rows):
-            if [x[1] for x in count_blocks(row)] != self.row_blocks[ridx]:
-                return False
-
-        for cidx, column in enumerate(self.columns):
-            if [x[1] for x in count_blocks(column)] != self.col_blocks[cidx]:
-                return False
-
-        return True
+        return not VAL_UNKNOWN in self.volume
 
     def apply_algorithm(self, name: str, method: Algorithm) -> bool:
         """
@@ -206,6 +217,11 @@ class Grid:
 
         for ycoord, row in enumerate(self.row_blocks):
             _logger.debug("Processing row %d: %s", ycoord, self.rows[ycoord])
+            if VAL_UNKNOWN not in self.rows[ycoord]:
+                _logger.debug(
+                    "Skipping complete row %d: %s", ycoord, self.rows[ycoord]
+                )
+                continue
             content = method(row, self.rows[ycoord])
             _logger.debug("New content: %s", content)
             if content == self.rows[ycoord]:
@@ -223,6 +239,13 @@ class Grid:
             _logger.debug(
                 "Processing column %d: %s", xcoord, self.columns[xcoord]
             )
+            if VAL_UNKNOWN not in self.columns[xcoord]:
+                _logger.debug(
+                    "Skipping complete column %d: %s",
+                    xcoord,
+                    self.columns[xcoord],
+                )
+                continue
             content = method(col, self.columns[xcoord])
             _logger.debug("New content: %s", content)
             if content == self.columns[xcoord]:
