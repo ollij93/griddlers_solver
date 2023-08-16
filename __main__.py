@@ -1,8 +1,10 @@
 """Main entrypoint of this package."""
 
-import argparse
+import dataclasses
 import logging
 import sys
+
+import cfgclasses as cfg
 
 from . import griddlersnet
 from .solver import ALGORITHMS
@@ -10,20 +12,23 @@ from .solver import ALGORITHMS
 _logger = logging.getLogger(__name__)
 
 
-def _parse_args(argv: list[str]) -> argparse.Namespace:
-    """Parse the CLI arguments."""
-    parser = argparse.ArgumentParser()
+@dataclasses.dataclass
+class Config(cfg.ConfigClass):
+    """Configuration for this package."""
 
-    parser.add_argument("-d", "--debug", action="store_true")
-    parser.add_argument("-f", "--brute-force", action="store_true")
-    parser.add_argument("puzzle", type=int)
-
-    return parser.parse_args(argv)
+    puzzle: int = cfg.positional("The puzzle to solve")
+    debug: bool = cfg.store_true(
+        "Turn on debug output", optnames=["-d", "--debug"]
+    )
+    brute_force: bool = cfg.store_true(
+        "Enable brute force algorithms",
+        optnames=["-f", "--brute-force"],
+    )
 
 
 def main(argv: list[str]) -> int:
     """Main entry point of this script."""
-    args = _parse_args(argv)
+    args = Config.parse_args(argv, prog="griddlerssolver")
 
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
 
